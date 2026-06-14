@@ -56,18 +56,20 @@ Options:
 - `--version` print the version and exit without opening a window.
 - `-h`, `--help` show the help message and exit.
 
-On startup, a prompt `]` appears at the bottom of the screen. Type your lines there.
+On startup you get a full-screen editor. Type a line anywhere and press Enter to
+submit the logical line under the cursor.
 
 ```
-] 10 PRINT "HELLO, WORLD!"
-] 20 FOR I = 1 TO 3
-] 30 PRINT "COUNT="; I
-] 40 NEXT I
-] RUN
+10 PRINT "HELLO, WORLD!"
+20 FOR I = 1 TO 3
+30 PRINT "COUNT="; I
+40 NEXT I
+RUN
 ```
 
 - A line entered with a line number is added to the program (re-enter the same number to overwrite; enter the number alone to delete).
-- `RUN` to execute, `LIST` to list, `NEW` to clear everything.
+- Move the cursor freely with the arrow keys and edit in place: `Insert` toggles insert / overtype, `Home` / `End` jump to the start / end of the line, and `Backspace` / `Delete` remove characters. To fix an existing line, `LIST` it, move the cursor onto the line, change it, and press Enter.
+- `RUN` to execute, `LIST` to list, `NEW` to clear everything. Press `Ctrl+C` during a run to interrupt it and return to edit mode.
 - `SAVE "name"` / `LOAD "name"` save and load under the `samples/` directory.
 
 ## Samples
@@ -82,8 +84,8 @@ On startup, a prompt `]` appears at the bottom of the screen. Type your lines th
 Example of loading and running:
 
 ```
-] LOAD "graph"
-] RUN
+LOAD "graph"
+RUN
 ```
 
 ## Language Specification

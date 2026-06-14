@@ -539,7 +539,7 @@ In a game main loop, since `PSET` and `STICK` are frame-break targets, it runs f
 | Direction keys | `STICK(n)` |
 | Buttons | `BUTTON(n)` (Z / X / C / Space) |
 
-In edit mode, type with character keys, delete one character with Backspace, and confirm a line with Enter.
+For edit-mode key operations (cursor movement, insert / overtype toggle, Home/End, Backspace/Delete, submitting a line with Enter, etc.), see [Screen Editing](#21-screen-editing).
 
 ---
 
