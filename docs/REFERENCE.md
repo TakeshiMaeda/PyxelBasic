@@ -622,4 +622,4 @@ The `samples/` directory includes the following.
 | `hello.bas` | HELLO WORLD |
 | `count.bas` | Using FOR/NEXT and expressions |
 | `graph.bas` | Graphics with lines and points |
-| `game.bas` | Move a dot with the arrow keys |
+| `stick.bas` | Move a dot with the arrow keys (STICK input) |

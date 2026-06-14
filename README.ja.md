@@ -39,7 +39,7 @@ cd PyxelBasic
 python main.py                      通常起動（編集モード）
 python main.py hello                起動時に hello.bas を読み込む（短縮形）
 python main.py --load hello         上と同じ
-python main.py --load game --run    読み込んで自動実行
+python main.py --load stick --run   読み込んで自動実行
 python main.py --workdir ./mybas    SAVE/LOAD 用ディレクトリを指定
 python main.py --version            バージョンを表示して終了
 python main.py --help               ヘルプを表示して終了
@@ -75,7 +75,7 @@ python main.py --help               ヘルプを表示して終了
 | `samples/hello.bas` | HELLO WORLD |
 | `samples/count.bas` | FOR/NEXT と式の利用 |
 | `samples/graph.bas` | 線・点によるグラフィック描画 |
-| `samples/game.bas` | 方向キーで点を動かす例 |
+| `samples/stick.bas` | 方向キーで点を動かす例（STICK 入力） |
 
 読み込んで実行する例:
 

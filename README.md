@@ -39,7 +39,7 @@ cd PyxelBasic
 python main.py                      start normally (edit mode)
 python main.py hello                load hello.bas on startup (shorthand)
 python main.py --load hello         same as above
-python main.py --load game --run    load and run automatically
+python main.py --load stick --run   load and run automatically
 python main.py --workdir ./mybas    set the SAVE/LOAD directory
 python main.py --version            print the version and exit
 python main.py --help               show help and exit
@@ -75,7 +75,7 @@ On startup, a prompt `]` appears at the bottom of the screen. Type your lines th
 | `samples/hello.bas` | HELLO WORLD |
 | `samples/count.bas` | Using FOR/NEXT and expressions |
 | `samples/graph.bas` | Graphics with lines and points |
-| `samples/game.bas` | Move a dot with the arrow keys |
+| `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
 
 Example of loading and running:
 

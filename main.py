@@ -5,7 +5,7 @@ Usage:
     python main.py                      normal start (edit mode)
     python main.py hello                load hello.bas on startup (shorthand)
     python main.py --load hello         same as above
-    python main.py --load game --run    load and run automatically
+    python main.py --load stick --run   load and run automatically
     python main.py --workdir ./mybas    set the SAVE/LOAD directory
     python main.py --version            print the version and exit
 """
