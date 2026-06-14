@@ -11,7 +11,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pyxelbasic.interpreter import (  # noqa: E402
-    Interpreter, tokenize, basic_str, FRAME_BREAK,
+    Interpreter, tokenize, basic_str,
+)
+from pyxelbasic.keywords import (  # noqa: E402
+    FRAME_BREAK, STATEMENTS, FUNCTIONS,
 )
 
 
@@ -360,6 +363,28 @@ def test_renum():
     check("renum goto ref", "100" in lines[1][1], True)
 
 
+def test_dispatch_registration():
+    # STATEMENTS / FUNCTIONS are derived in keywords.py from the handler maps
+    # (STATEMENT_HANDLERS / FUNCTION_HANDLERS / MATH1). Pin their contents so a
+    # missing or stray keyword is caught. Expected values mirror the original
+    # hand-written sets.
+    expected_statements = {
+        "PRINT", "INPUT", "LET", "GOTO", "GOSUB", "RETURN", "IF",
+        "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
+        "PSET", "LINE", "END", "STOP", "DATA", "READ", "RESTORE",
+        "RANDOMIZE", "VSYNC",
+    }
+    expected_functions = {
+        "LEN", "LEFT$", "RIGHT$", "MID$", "CHR$", "ASC", "STR$", "VAL",
+        "ABS", "SGN", "INT", "FIX", "ROUND",
+        "SIN", "COS", "TAN", "ATN", "RAD", "DEG",
+        "EXP", "LOG", "LOG10", "SQR",
+        "RND", "INKEY$", "STICK", "BUTTON",
+    }
+    check("dispatch statements set", STATEMENTS, expected_statements)
+    check("dispatch functions set", FUNCTIONS, expected_functions)
+
+
 def main():
     for fn in [
         test_tokenize, test_print_expr, test_for_next, test_for_step,
@@ -369,6 +394,7 @@ def main():
         test_frame_break_flags, test_vsync_config_off_on,
         test_vsync_bad_word, test_vsync_list, test_vsync_reset,
         test_new_resets_framebreak, test_renum,
+        test_dispatch_registration,
     ]:
         print(fn.__name__)
         fn()

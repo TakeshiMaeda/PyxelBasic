@@ -6,8 +6,12 @@ Screen I/O goes through the IOTarget interface, so this module does not
 depend on Pyxel (easy to test or to swap the console out).
 """
 
-import math
 import random
+
+from .keywords import (
+    STATEMENT_HANDLERS, FUNCTION_HANDLERS, MATH1,
+    FRAME_BREAK, KEYWORDS, WORD_OPS, FUNCTIONS,
+)
 
 
 class BasicError(Exception):
@@ -15,49 +19,10 @@ class BasicError(Exception):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Reserved word definitions
-# ---------------------------------------------------------------------------
-
-# Statements that can start a line
-STATEMENTS = {
-    "PRINT", "INPUT", "LET", "GOTO", "GOSUB", "RETURN", "IF",
-    "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
-    "PSET", "LINE", "END", "STOP", "DATA", "READ", "RESTORE",
-    "RANDOMIZE", "VSYNC",
-}
-
-# Immediate (direct) mode commands
-DIRECT = {"RUN", "LIST", "NEW", "RENUM", "SAVE", "LOAD"}
-
-# Functions usable inside expressions
-FUNCTIONS = {
-    "LEN", "LEFT$", "RIGHT$", "MID$", "CHR$", "ASC", "STR$", "VAL",
-    "ABS", "SGN", "INT", "FIX", "ROUND",
-    "SIN", "COS", "TAN", "ATN", "RAD", "DEG",
-    "EXP", "LOG", "LOG10", "SQR",
-    "RND", "INKEY$", "STICK", "BUTTON",
-}
-
-# Syntactic keywords (neither operators nor statements)
-SYNTAX = {"THEN", "ELSE", "TO", "STEP"}
-
-# Word-form operators
-WORD_OPS = {"MOD", "AND", "OR", "NOT", "XOR"}
-
-KEYWORDS = STATEMENTS | DIRECT | FUNCTIONS | SYNTAX
-
-# --- Initial frame-break configuration ---
-# When any reserved word listed here is executed (as a statement) or evaluated
-# (as a function), the current frame's execution is cut off and resumed on the
-# next frame. Statements and functions are treated alike. This is the initial
-# value; at runtime it can be adjusted with the VSYNC <word> ON|OFF command
-# (Interpreter.frame_break).
-FRAME_BREAK = {
-    "PRINT",            # screen output
-    "PSET", "LINE",     # drawing statements
-    "STICK", "BUTTON",  # input polling (functions)
-}
+# Reserved-word definitions (keyword sets, handler maps, the math table and the
+# initial frame-break set) live in keywords.py and are imported at the top of
+# this module. Statements/functions are dispatched by looking up the handler
+# method name there and resolving it with getattr.
 
 
 # ---------------------------------------------------------------------------
@@ -334,86 +299,69 @@ class Evaluator:
         if name in self.interp.frame_break:
             self.interp.yield_frame = True
 
-        # Functions usable without arguments
-        if name == "RND":
-            if self.peek()[0] == "LP":
-                args = self.parse_arglist()
-                n = self._num(args[0]) if args else 1
-                return random.random() * n
-            return random.random()
-        if name == "INKEY$":
-            return self.interp.io.inkey()
+        spec = self.interp._func_dispatch.get(name)
+        if spec is not None:
+            fn, raw = spec
+            if raw:
+                return fn(self)
+            return fn(self, self.parse_arglist())
+        # Single-argument math function (name guaranteed to be in MATH1 here)
+        return MATH1[name](self._num(self.parse_arglist()[0]))
 
-        args = self.parse_arglist()
+    # --- Function handlers (wired by name in keywords.FUNCTION_HANDLERS) ---
+    # raw handlers parse their own arguments; the rest receive a pre-evaluated
+    # argument list. Single-argument math functions are handled via keywords.MATH1.
 
-        def num(idx):
-            return self._num(args[idx])
+    def _fn_rnd(self):
+        if self.peek()[0] == "LP":
+            args = self.parse_arglist()
+            n = self._num(args[0]) if args else 1
+            return random.random() * n
+        return random.random()
 
-        def s(idx):
-            return basic_str(args[idx])
+    def _fn_inkey(self):
+        return self.interp.io.inkey()
 
-        if name == "LEN":
-            return len(s(0))
-        if name == "LEFT$":
-            return s(0)[:int(num(1))]
-        if name == "RIGHT$":
-            k = int(num(1))
-            return s(0)[-k:] if k > 0 else ""
-        if name == "MID$":
-            start = int(num(1)) - 1  # 1-based
-            if len(args) >= 3:
-                length = int(num(2))
-                return s(0)[start:start + length]
-            return s(0)[start:]
-        if name == "CHR$":
-            return chr(int(num(0)))
-        if name == "ASC":
-            t = s(0)
-            return ord(t[0]) if t else 0
-        if name == "STR$":
-            return basic_str(num(0))
-        if name == "VAL":
-            try:
-                txt = s(0).strip()
-                return float(txt) if "." in txt else int(txt)
-            except ValueError:
-                return 0
-        if name == "ABS":
-            return abs(num(0))
-        if name == "SGN":
-            v = num(0)
-            return (v > 0) - (v < 0)
-        if name == "INT":
-            return math.floor(num(0))
-        if name == "FIX":
-            return math.trunc(num(0))
-        if name == "ROUND":
-            return round(num(0))
-        if name == "SIN":
-            return math.sin(num(0))
-        if name == "COS":
-            return math.cos(num(0))
-        if name == "TAN":
-            return math.tan(num(0))
-        if name == "ATN":
-            return math.atan(num(0))
-        if name == "RAD":
-            return math.radians(num(0))
-        if name == "DEG":
-            return math.degrees(num(0))
-        if name == "EXP":
-            return math.exp(num(0))
-        if name == "LOG":
-            return math.log(num(0))
-        if name == "LOG10":
-            return math.log10(num(0))
-        if name == "SQR":
-            return math.sqrt(num(0))
-        if name == "STICK":
-            return self.interp.io.stick(int(num(0)))
-        if name == "BUTTON":
-            return self.interp.io.button(int(num(0)))
-        raise BasicError("Unsupported function: %s" % name)
+    def _fn_len(self, args):
+        return len(basic_str(args[0]))
+
+    def _fn_left(self, args):
+        return basic_str(args[0])[:int(self._num(args[1]))]
+
+    def _fn_right(self, args):
+        k = int(self._num(args[1]))
+        return basic_str(args[0])[-k:] if k > 0 else ""
+
+    def _fn_mid(self, args):
+        s = basic_str(args[0])
+        start = int(self._num(args[1])) - 1  # 1-based
+        if len(args) >= 3:
+            length = int(self._num(args[2]))
+            return s[start:start + length]
+        return s[start:]
+
+    def _fn_chr(self, args):
+        return chr(int(self._num(args[0])))
+
+    def _fn_asc(self, args):
+        t = basic_str(args[0])
+        return ord(t[0]) if t else 0
+
+    def _fn_str(self, args):
+        return basic_str(self._num(args[0]))
+
+    def _fn_val(self, args):
+        try:
+            txt = basic_str(args[0]).strip()
+            return float(txt) if "." in txt else int(txt)
+        except ValueError:
+            return 0
+
+    def _fn_stick(self, args):
+        return self.interp.io.stick(int(self._num(args[0])))
+
+    def _fn_button(self, args):
+        return self.interp.io.button(int(self._num(args[0])))
 
     # --- Helpers ---
     def _num(self, v):
@@ -460,6 +408,16 @@ class Interpreter:
         # Frame-break targets. Kept across runs because the VSYNC command can
         # adjust them at runtime; reset_runtime does not reinitialize this.
         self.frame_break = set(FRAME_BREAK)
+        # Resolve keyword -> handler once here, so dispatch costs no getattr per
+        # step. Statement handlers are bound Interpreter methods; function handlers
+        # are unbound Evaluator functions (called with the live Evaluator as self).
+        self._stmt_dispatch = {
+            kw: getattr(self, name) for kw, name in STATEMENT_HANDLERS.items()
+        }
+        self._func_dispatch = {
+            kw: (getattr(Evaluator, name), raw)
+            for kw, (name, raw) in FUNCTION_HANDLERS.items()
+        }
         self.reset_runtime()
         self.state = "EDIT"
 
@@ -623,53 +581,10 @@ class Interpreter:
         if kind != "KW":
             raise BasicError("Invalid statement")
 
-        if val == "LET":
-            self._do_assign(toks, 1)
-        elif val == "PRINT":
-            self._do_print(toks)
-        elif val == "INPUT":
-            self._do_input(toks)
-        elif val == "GOTO":
-            self._do_goto(toks)
-        elif val == "GOSUB":
-            self._do_gosub(toks)
-        elif val == "RETURN":
-            self._do_return()
-        elif val == "IF":
-            self._do_if(toks)
-        elif val == "FOR":
-            self._do_for(toks)
-        elif val == "NEXT":
-            self._do_next(toks)
-        elif val == "DIM":
-            self._do_dim(toks)
-        elif val == "REM":
-            pass
-        elif val == "DATA":
-            pass  # already collected
-        elif val == "READ":
-            self._do_read(toks)
-        elif val == "RESTORE":
-            self.data_ptr = 0
-        elif val == "CLS":
-            self.io.cls()
-        elif val == "LOCATE":
-            self._do_locate(toks)
-        elif val == "COLOR":
-            v = self._eval_from(toks, 1)
-            self.io.set_color(int(v))
-        elif val == "PSET":
-            self._do_pset(toks)
-        elif val == "LINE":
-            self._do_line(toks)
-        elif val == "RANDOMIZE":
-            self._do_randomize(toks)
-        elif val == "VSYNC":
-            self._do_vsync(toks)
-        elif val in ("END", "STOP"):
-            self.state = "END"
-        else:
+        handler = self._stmt_dispatch.get(val)
+        if handler is None:
             raise BasicError("Unsupported statement: %s" % val)
+        handler(toks)
 
         # If this statement is a frame-break target, cut off the frame here
         if val in self.frame_break:
@@ -699,6 +614,26 @@ class Interpreter:
             self.set_var(name, value)
         else:
             self.set_array(name, indices, value)
+
+    def _do_let(self, toks):
+        self._do_assign(toks, 1)
+
+    def _do_noop(self, toks):
+        # REM is a comment; DATA is pre-collected at prepare_run time.
+        pass
+
+    def _do_restore(self, toks):
+        self.data_ptr = 0
+
+    def _do_cls(self, toks):
+        self.io.cls()
+
+    def _do_color(self, toks):
+        v = self._eval_from(toks, 1)
+        self.io.set_color(int(v))
+
+    def _do_end(self, toks):
+        self.state = "END"
 
     def _do_print(self, toks):
         pos = 1
@@ -780,7 +715,7 @@ class Interpreter:
         self.gosub_stack.append(self.pc + 1)
         self._jump_to(target)
 
-    def _do_return(self):
+    def _do_return(self, toks):
         if not self.gosub_stack:
             raise BasicError("RETURN without GOSUB")
         self.pc = self.gosub_stack.pop()
@@ -1001,3 +936,18 @@ def detokenize(toks):
             parts.append(str(val))
     # Join simply with spaces
     return " ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Wiring sanity check (fail fast at import, like a compile-time interface check)
+# ---------------------------------------------------------------------------
+
+# Every keyword declared in keywords.py must map to a handler method that really
+# exists. This catches a typo or a forgotten implementation the moment the module
+# is imported, rather than at runtime when the keyword is first used.
+for _kw, _method in STATEMENT_HANDLERS.items():
+    assert hasattr(Interpreter, _method), \
+        "statement %r is wired to missing Interpreter.%s" % (_kw, _method)
+for _kw, (_method, _raw) in FUNCTION_HANDLERS.items():
+    assert hasattr(Evaluator, _method), \
+        "function %r is wired to missing Evaluator.%s" % (_kw, _method)
