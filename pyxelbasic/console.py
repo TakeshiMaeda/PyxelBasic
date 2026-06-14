@@ -27,6 +27,11 @@ class Console:
         # the number of points grows).
         self.gimg = pyxel.Image(cols * CHAR_W, rows * CHAR_H)
         self.gimg.cls(self.bg)
+        # Text is baked into its own image and only re-rendered when the buffer
+        # changes (the dirty flag), so a normal frame is just two blts instead of
+        # thousands of per-character text() calls.
+        self.timg = pyxel.Image(cols * CHAR_W, rows * CHAR_H)
+        self._dirty = True
         self.insert_mode = True     # editor: insert (True) vs overtype (False)
         self._clear_buffer()
         # Key input (for INKEY$): the character typed in the most recent frame.
@@ -44,6 +49,7 @@ class Console:
     def cls(self):
         self._clear_buffer()
         self.gimg.cls(self.bg)
+        self._dirty = True
 
     def set_color(self, col):
         self.color = col
@@ -64,6 +70,7 @@ class Console:
         self._newline()
 
     def _putchar(self, ch):
+        self._dirty = True
         if ch == "\n":
             self._newline()
             return
@@ -105,6 +112,7 @@ class Console:
         self.cols_color.append([self.color] * self.cols)
         self.cont.append(False)
         self.cont[0] = False          # the top row can never be a continuation
+        self._dirty = True
 
     # --- Logical line model (for the editor) ---
     def _logical_start(self, y):
@@ -266,6 +274,7 @@ class Console:
         self.cols_color = new_cols
         self.cont = new_cont
         self.cont[0] = False
+        self._dirty = True
         base_r = r - removed_top
         self.cy = max(0, min(base_r + new_caret // self.cols, self.rows - 1))
         self.cx = max(0, min(new_caret % self.cols, self.cols - 1))
@@ -301,19 +310,35 @@ class Console:
         return 0
 
     # --- Drawing ---
-    def draw(self):
-        pyxel.cls(self.bg)
-        # Transfer the whole graphics layer at once (cost is constant regardless
-        # of the number of points)
-        pyxel.blt(0, 0, self.gimg, 0, 0, self.gimg.width, self.gimg.height)
-        # Overlay the text
+    def _render_text(self):
+        """Bake the whole text grid into self.timg (only when it changed)."""
+        self.timg.cls(self.bg)
         for y in range(self.rows):
             row = self.chars[y]
             colrow = self.cols_color[y]
-            for x in range(self.cols):
-                ch = row[x]
-                if ch != " ":
-                    pyxel.text(x * CHAR_W, y * CHAR_H, ch, colrow[x])
+            x = 0
+            while x < self.cols:
+                if row[x] == " ":
+                    x += 1
+                    continue
+                # Draw a run of consecutive same-color characters in one call.
+                col = colrow[x]
+                start = x
+                buf = []
+                while x < self.cols and row[x] != " " and colrow[x] == col:
+                    buf.append(row[x])
+                    x += 1
+                self.timg.text(start * CHAR_W, y * CHAR_H, "".join(buf), col)
+
+    def draw(self):
+        if self._dirty:
+            self._render_text()
+            self._dirty = False
+        pyxel.cls(self.bg)
+        # Both layers are transferred as whole images, so per-frame cost is
+        # constant regardless of how much text or how many points are on screen.
+        pyxel.blt(0, 0, self.gimg, 0, 0, self.gimg.width, self.gimg.height)
+        pyxel.blt(0, 0, self.timg, 0, 0, self.timg.width, self.timg.height, self.bg)
 
     def draw_cursor(self, visible):
         if not visible:

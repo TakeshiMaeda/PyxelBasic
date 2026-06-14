@@ -228,10 +228,11 @@ class Evaluator:
                 if b == 0:
                     raise BasicError(Err.DIVISION_BY_ZERO)
                 left = a / b
-            else:  # MOD
-                if b == 0:
+            else:  # MOD (both sides are integerized)
+                ib = int(b)
+                if ib == 0:   # also catches 0 < |b| < 1, where int(b) == 0
                     raise BasicError(Err.DIVISION_BY_ZERO)
-                left = int(a) % int(b)
+                left = int(a) % ib
         return left
 
     def parse_pow(self):
@@ -485,6 +486,7 @@ class Interpreter:
         self.jumped = False
         self.input_targets = []
         self.yield_frame = False    # signal from VSYNC to cut off this frame
+        self.cur_line = 0           # line number of the statement last executed
 
     def prepare_run(self):
         self.reset_runtime()
@@ -860,6 +862,8 @@ class Interpreter:
         # VSYNC                  -> break this frame (explicit sync point)
         # VSYNC LIST             -> show the current break targets
         # VSYNC RESET            -> restore the break config to its initial state
+        # VSYNC CLEAR            -> remove every automatic break target (only an
+        #                           explicit VSYNC breaks a frame afterwards)
         # VSYNC <word> ON|OFF    -> change the frame-break setting for that word
         if len(toks) == 1:
             self.yield_frame = True
@@ -870,6 +874,9 @@ class Interpreter:
             return
         if sub == "RESET":
             self.frame_break = set(FRAME_BREAK)
+            return
+        if sub == "CLEAR":
+            self.frame_break = set()
             return
         # Remaining form is "<word> ON|OFF". The second word must be a valid reserved word (KW token)
         if toks[1][0] != "KW":

@@ -343,6 +343,32 @@ def test_vsync_reset():
     check("restored after reset", interp.frame_break == set(FRAME_BREAK), True)
 
 
+def test_mod_fraction():
+    # MOD integerizes both sides; a divisor with 0 < |b| < 1 integerizes to 0,
+    # which must raise a BASIC error (not crash with a Python ZeroDivisionError).
+    io, _ = run_program([(10, 'PRINT 0.0003 MOD 0.1')])
+    check("mod by fraction -> error", any("ERROR" in s for s in io.out), True)
+    io, _ = run_program([(10, 'PRINT 7.9 MOD 3.9')])
+    check("mod integerizes operands", io.out[0], "1")
+
+
+def test_vsync_clear():
+    # VSYNC CLEAR removes every automatic break target; an explicit VSYNC still works.
+    io = MockIO()
+    interp = Interpreter(io)
+    interp.store_line(10, 'VSYNC CLEAR')
+    interp.prepare_run()
+    interp.step()   # CLEAR
+    check("cleared frame_break empty", interp.frame_break, set())
+    # An explicit VSYNC still requests a frame break even after CLEAR.
+    interp.yield_frame = False
+    interp.store_line(20, 'VSYNC')
+    interp.prepare_run()
+    interp.step()   # CLEAR (re-run from line 10)
+    interp.step()   # VSYNC (explicit)
+    check("explicit vsync still breaks", interp.yield_frame, True)
+
+
 def test_new_resets_framebreak():
     # NEW also restores the break config to its initial state
     io = MockIO()
@@ -413,6 +439,7 @@ def main():
         test_input, test_logical, test_graphics, test_vsync,
         test_frame_break_flags, test_vsync_config_off_on,
         test_vsync_bad_word, test_vsync_list, test_vsync_reset,
+        test_vsync_clear, test_mod_fraction,
         test_new_resets_framebreak, test_renum,
         test_dispatch_registration, test_alltest_sample,
     ]:

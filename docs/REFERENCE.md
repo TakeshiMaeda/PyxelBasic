@@ -5,7 +5,7 @@ English | [日本語](REFERENCE.ja.md)
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
-- Target version: prototype v0.0.3
+- Target version: prototype v0.0.4
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -71,6 +71,7 @@ Enter to update that line.
 | `Delete` | Delete the character at the cursor |
 | `Home` / `End` | Move to the start / end of the logical line |
 | `Enter` | Submit the logical line under the cursor, then move down one logical line |
+| `Esc` | Show a quit-confirmation dialog (`Y` quits, `N` / `Esc` cancels) |
 
 ---
 
@@ -94,6 +95,7 @@ its content.
 - Execution advances up to 800 statements per frame. When it reaches a frame-break statement such as `PRINT`, or a `VSYNC`, it ends execution for that frame and continues on the next frame (see [Frame Control](#10-frame-control-vsync)).
 - When `INPUT` is reached, execution waits for input; it resumes after the user types a line and presses Enter.
 - When `END` / `STOP` is reached, or the last line is passed, execution ends, `OK` is displayed, and it returns to edit mode.
+- Pressing **Ctrl+C** during a run (or while waiting for `INPUT`) interrupts it: `BREAK in line <line>` is displayed and it returns to edit mode. The program is kept, so you can edit and re-run.
 - If an error occurs during execution, `?ERROR <code> in line <line>: <message>` is displayed and execution stops (see Section 13 for codes).
 
 ---
@@ -478,6 +480,7 @@ PyxelBasic runs at 60 FPS. By ending execution for the current frame at a specif
 | `VSYNC keyword ON` | Add the keyword to the frame-break targets |
 | `VSYNC keyword OFF` | Remove the keyword from the frame-break targets |
 | `VSYNC RESET` | Reset the frame-break settings to their initial state |
+| `VSYNC CLEAR` | Remove every automatic frame-break target (afterwards only an explicit `VSYNC` breaks a frame) |
 | `VSYNC LIST` | List the current frame-break targets |
 
 - An invalid keyword (an undefined word) is an error.

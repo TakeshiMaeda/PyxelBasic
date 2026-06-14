@@ -27,7 +27,8 @@ class App:
         # change it from inside the interpreter. Defaults to the bundled samples.
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
 
-        pyxel.init(width, height, title="PyxelBasic", fps=60)
+        # Disable Pyxel's built-in ESC-to-quit; we confirm with a dialog instead.
+        pyxel.init(width, height, title="PyxelBasic", fps=60, quit_key=pyxel.KEY_NONE)
         cols = width // CHAR_W
         rows = height // CHAR_H
         self.console = Console(cols, rows)
@@ -35,6 +36,7 @@ class App:
 
         self.mode = "EDIT"          # EDIT / RUN / INPUT
         self.input_origin = 0       # cursor offset where INPUT typing starts
+        self.confirm_quit = False   # ESC shows a quit confirmation dialog
 
         self._banner()
         loaded = self._load_file(autoload) if autoload else False
@@ -55,12 +57,36 @@ class App:
         # Keep the most recent typed character for INKEY$
         self.console.key_char = pyxel.input_text if hasattr(pyxel, "input_text") else ""
 
+        # ESC opens a quit-confirmation dialog; while it is up, only Y/N/ESC act.
+        if self.confirm_quit:
+            if pyxel.btnp(pyxel.KEY_Y):
+                pyxel.quit()
+            elif pyxel.btnp(pyxel.KEY_N) or pyxel.btnp(pyxel.KEY_ESCAPE):
+                self.confirm_quit = False
+            return
+        if pyxel.btnp(pyxel.KEY_ESCAPE):
+            self.confirm_quit = True
+            return
+
         if self.mode == "RUN":
             self._update_run()
         else:
             self._update_edit()
 
+    def _break_pressed(self):
+        # Ctrl+C interrupts a running program (classic BASIC break).
+        return pyxel.btn(pyxel.KEY_CTRL) and pyxel.btnp(pyxel.KEY_C)
+
+    def _break_run(self):
+        self.console.print_line("")
+        self.console.print_line("BREAK in line %d" % self.interp.cur_line)
+        self.interp.state = "EDIT"
+        self.mode = "EDIT"
+
     def _update_run(self):
+        if self._break_pressed():
+            self._break_run()
+            return
         for _ in range(STEPS_PER_FRAME):
             self.interp.step()
             st = self.interp.state
@@ -82,6 +108,10 @@ class App:
 
     # --- Full-screen editor (EDIT / INPUT) ---
     def _update_edit(self):
+        # Ctrl+C while waiting for INPUT also breaks back to edit mode.
+        if self.mode == "INPUT" and self._break_pressed():
+            self._break_run()
+            return
         c = self.console
         for ch in (pyxel.input_text if hasattr(pyxel, "input_text") else ""):
             if 32 <= ord(ch) < 127:
@@ -227,5 +257,19 @@ class App:
         self.console.draw()
         # The edited text lives in the console buffer itself; just blink a cursor
         # (shape reflects insert vs overtype mode).
-        if self.mode in ("EDIT", "INPUT") and pyxel.frame_count % 30 < 15:
+        if (self.mode in ("EDIT", "INPUT") and not self.confirm_quit
+                and pyxel.frame_count % 30 < 15):
             self.console.draw_cursor(True)
+        if self.confirm_quit:
+            self._draw_quit_dialog()
+
+    def _draw_quit_dialog(self):
+        w, h = 120, 27
+        x = (pyxel.width - w) // 2
+        y = (pyxel.height - h) // 2
+        pyxel.rect(x, y, w, h, 1)
+        pyxel.rectb(x, y, w, h, 7)
+        msg1 = "Quit PyxelBasic?"
+        msg2 = "Y = yes   N = no"
+        pyxel.text(x + (w - len(msg1) * CHAR_W) // 2, y + 8, msg1, 7)
+        pyxel.text(x + (w - len(msg2) * CHAR_W) // 2, y + 17, msg2, 7)
