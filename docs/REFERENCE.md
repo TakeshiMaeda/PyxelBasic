@@ -89,6 +89,10 @@ its content.
 | Line number only (e.g. `10`) | Deletes that line |
 | Statement / command only (no line number) | Executes immediately as a direct command (output flows from the cursor) |
 
+When a numbered line is stored, its code is upper-cased (keywords, variable and
+function names, operators). String literals (`"..."`) and the comment text after
+`REM` are kept exactly as typed.
+
 ### 3.2 Run Model
 
 - `RUN` executes the program in line-number order.

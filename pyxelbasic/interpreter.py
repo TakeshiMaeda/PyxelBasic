@@ -116,6 +116,46 @@ def tokenize(src):
     return tokens
 
 
+def normalize_line(text):
+    """Upper-case the code part of a source line for storage.
+
+    Keywords, variable / function names and operators become upper-case, while
+    string literals ("...") and the comment text after REM are kept exactly as
+    typed. Spacing is preserved (this is a source scan, not tokenize/detokenize).
+    """
+    out = []
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            # Copy the string literal verbatim, including the quotes.
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 1
+            if j < n:
+                j += 1            # include the closing quote
+            out.append(text[i:j])
+            i = j
+            continue
+        if c.isalpha():
+            j = i
+            while j < n and (text[j].isalnum() or text[j] == "$"):
+                j += 1
+            word = text[i:j]
+            if word.upper() == "REM":
+                # Keep the comment after REM exactly as typed.
+                out.append("REM")
+                out.append(text[j:])
+                return "".join(out)
+            out.append(word.upper())
+            i = j
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def basic_str(v):
     """BASIC-style stringification. A float with an integer value prints as an integer."""
     if isinstance(v, str):
@@ -424,7 +464,7 @@ class Interpreter:
         if text.strip() == "":
             self.program.pop(line_no, None)
         else:
-            self.program[line_no] = text
+            self.program[line_no] = normalize_line(text)
 
     def list_lines(self, start=None, end=None):
         result = []
@@ -452,6 +492,13 @@ class Interpreter:
     def _renum_refs(self, text, mapping):
         # Simple pass that replaces the number right after a line-referencing statement
         toks = tokenize(text)
+        # Only lines that actually reference a line number are rewritten; every
+        # other line is kept verbatim. This preserves REM comments (tokenize()
+        # drops the comment text, so round-tripping them through detokenize would
+        # blank the line) and the original formatting of plain statements.
+        refkw = (("KW", "GOTO"), ("KW", "GOSUB"), ("KW", "THEN"))
+        if not any(t in refkw for t in toks):
+            return text
         out = []
         i = 0
         while i < len(toks):

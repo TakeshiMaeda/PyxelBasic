@@ -389,6 +389,34 @@ def test_renum():
     check("renum goto ref", "100" in lines[1][1], True)
 
 
+def test_renum_keeps_rem():
+    # RENUM must not blank REM lines (regression: tokenize drops the comment, so
+    # round-tripping a REM line through detokenize used to leave an empty line).
+    io = MockIO()
+    interp = Interpreter(io)
+    interp.store_line(10, 'REM ===== HEADER =====')
+    interp.store_line(20, 'PRINT "HI"')
+    interp.store_line(30, 'GOTO 20')
+    interp.renum(100, 10)
+    prog = dict(interp.list_lines())
+    check("renum keeps REM text", prog.get(100), 'REM ===== HEADER =====')
+    check("renum keeps plain line", prog.get(110), 'PRINT "HI"')
+    check("renum remaps goto", prog.get(120), 'GOTO 110')
+
+
+def test_store_uppercases_code():
+    # Lines are upper-cased when registered, but string literals and REM comment
+    # text are preserved as typed.
+    interp = Interpreter(MockIO())
+    interp.store_line(10, 'print left$("AbC", 2)')
+    interp.store_line(20, 'rem Keep This Case')
+    interp.store_line(30, 'for i=1 to 5')
+    prog = dict(interp.list_lines())
+    check("upper code, keep string", prog.get(10), 'PRINT LEFT$("AbC", 2)')
+    check("upper REM, keep comment", prog.get(20), 'REM Keep This Case')
+    check("upper plain", prog.get(30), 'FOR I=1 TO 5')
+
+
 def test_dispatch_registration():
     # STATEMENTS / FUNCTIONS are derived in keywords.py from the handler maps
     # (STATEMENT_HANDLERS / FUNCTION_HANDLERS / MATH1). Pin their contents so a
@@ -440,7 +468,8 @@ def main():
         test_frame_break_flags, test_vsync_config_off_on,
         test_vsync_bad_word, test_vsync_list, test_vsync_reset,
         test_vsync_clear, test_mod_fraction,
-        test_new_resets_framebreak, test_renum,
+        test_new_resets_framebreak, test_renum, test_renum_keeps_rem,
+        test_store_uppercases_code,
         test_dispatch_registration, test_alltest_sample,
     ]:
         print(fn.__name__)
