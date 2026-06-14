@@ -5,7 +5,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在はプロトタイプ版（v0.0.4）です。
+> 現在はプロトタイプ版（v0.0.5）です。
 
 ## 特徴
 
@@ -41,6 +41,7 @@ python main.py hello                起動時に hello.bas を読み込む（短
 python main.py --load hello         上と同じ
 python main.py --load stick --run   読み込んで自動実行
 python main.py --workdir ./mybas    SAVE/LOAD 用ディレクトリを指定
+python main.py --showfps            フレームレートをタイトルバーに表示
 python main.py --version            バージョンを表示して終了
 python main.py --help               ヘルプを表示して終了
 ```
@@ -51,6 +52,7 @@ python main.py --help               ヘルプを表示して終了
 - `--workdir DIR` SAVE/LOAD が使うディレクトリ。起動時に固定され、インタプリタ内部からは
   変更できない。省略時は同梱の `samples/`。
 - `--run` 読み込んだプログラムを自動実行する（`--load` が必要）。
+- `--showfps` 実フレームレートをウィンドウのタイトルバーに表示する。
 - `--version` ウィンドウを開かずにバージョンだけ表示して終了する。
 - `-h`, `--help` ヘルプを表示して終了する。
 

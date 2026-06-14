@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is a prototype (v0.0.4).
+> This is a prototype (v0.0.5).
 
 ## Features
 
@@ -41,6 +41,7 @@ python main.py hello                load hello.bas on startup (shorthand)
 python main.py --load hello         same as above
 python main.py --load stick --run   load and run automatically
 python main.py --workdir ./mybas    set the SAVE/LOAD directory
+python main.py --showfps            show the frame rate in the title bar
 python main.py --version            print the version and exit
 python main.py --help               show help and exit
 ```
@@ -51,6 +52,7 @@ Options:
 - `--workdir DIR` directory used by SAVE/LOAD. Fixed at startup; it cannot be
   changed from inside the interpreter. Defaults to the bundled `samples/`.
 - `--run` run the loaded program automatically (requires `--load`).
+- `--showfps` show the real frame rate in the window title bar.
 - `--version` print the version and exit without opening a window.
 - `-h`, `--help` show the help message and exit.
 

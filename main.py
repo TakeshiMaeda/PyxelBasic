@@ -7,6 +7,7 @@ Usage:
     python main.py --load hello         same as above
     python main.py --load stick --run   load and run automatically
     python main.py --workdir ./mybas    set the SAVE/LOAD directory
+    python main.py --showfps            show the frame rate in the title bar
     python main.py --version            print the version and exit
 """
 
@@ -33,6 +34,9 @@ def build_parser():
         "--run", action="store_true",
         help="run the program automatically after loading")
     parser.add_argument(
+        "--showfps", action="store_true",
+        help="show the frame rate in the title bar")
+    parser.add_argument(
         "--version", action="store_true",
         help="print the version and exit without starting")
     return parser
@@ -53,7 +57,8 @@ def main():
 
     # Imported here so that --version needs neither Pyxel nor a display.
     from pyxelbasic.app import App
-    App(autoload=load, workdir=args.workdir, autorun=args.run)
+    App(autoload=load, workdir=args.workdir, autorun=args.run,
+        show_fps=args.showfps)
 
 
 if __name__ == "__main__":

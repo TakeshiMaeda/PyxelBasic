@@ -6,6 +6,7 @@ interpreter from Pyxel's main loop (update/draw).
 """
 
 import os
+import time
 
 import pyxel
 
@@ -22,7 +23,7 @@ SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
 
 class App:
     def __init__(self, width=256, height=256, autoload=None,
-                 workdir=None, autorun=False):
+                 workdir=None, autorun=False, show_fps=False):
         # Directory used by SAVE / LOAD. Fixed at startup; there is no command to
         # change it from inside the interpreter. Defaults to the bundled samples.
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
@@ -37,6 +38,10 @@ class App:
         self.mode = "EDIT"          # EDIT / RUN / INPUT
         self.input_origin = 0       # cursor offset where INPUT typing starts
         self.confirm_quit = False   # ESC shows a quit confirmation dialog
+        # FPS in the title bar (enabled with --showfps): measure the real frame rate.
+        self.show_fps = show_fps
+        self._fps_n = 0
+        self._fps_t = time.perf_counter()
 
         self._banner()
         loaded = self._load_file(autoload) if autoload else False
@@ -54,6 +59,8 @@ class App:
 
     # --- Main loop ---
     def update(self):
+        if self.show_fps:
+            self._update_fps()
         # Keep the most recent typed character for INKEY$
         self.console.key_char = pyxel.input_text if hasattr(pyxel, "input_text") else ""
 
@@ -72,6 +79,16 @@ class App:
             self._update_run()
         else:
             self._update_edit()
+
+    def _update_fps(self):
+        # Count frames and refresh the title bar with the real frame rate ~2x/sec.
+        self._fps_n += 1
+        now = time.perf_counter()
+        dt = now - self._fps_t
+        if dt >= 0.5:
+            pyxel.title("PyxelBasic  %.1f FPS" % (self._fps_n / dt))
+            self._fps_n = 0
+            self._fps_t = now
 
     def _break_pressed(self):
         # Ctrl+C interrupts a running program (classic BASIC break).
