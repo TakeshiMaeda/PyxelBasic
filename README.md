@@ -9,6 +9,7 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 
 ## Features
 
+- Full-screen editor: move the cursor anywhere and edit lines in place (insert / overtype, Home/End, Backspace/Delete)
 - Line-numbered program editing (insert / overwrite / delete, `LIST` / `RENUM`)
 - Control structures such as `GOTO` / `GOSUB` / `IF...THEN` / `FOR...NEXT`
 - Numeric and string variables, and multi-dimensional arrays
