@@ -81,6 +81,7 @@ RUN
 | `samples/count.bas` | Using FOR/NEXT and expressions |
 | `samples/graph.bas` | Graphics with lines and points |
 | `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
+| `samples/meteo.bas` | Dodge meteors falling from the top with the arrow keys (no collision detection) |
 
 Example of loading and running:
 

@@ -80,6 +80,7 @@ RUN
 | `samples/count.bas` | FOR/NEXT と式の利用 |
 | `samples/graph.bas` | 線・点によるグラフィック描画 |
 | `samples/stick.bas` | 方向キーで点を動かす例（STICK 入力） |
+| `samples/meteo.bas` | 方向キーで上から降ってくる隕石をよける（当たり判定なし） |
 
 読み込んで実行する例:
 
