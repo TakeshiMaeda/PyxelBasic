@@ -5,7 +5,7 @@ English | [日本語](REFERENCE.ja.md)
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
-- Target version: prototype v0.1
+- Target version: prototype v0.0.3
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -51,7 +51,26 @@ python main.py hello      load samples/hello.bas on startup
 
 - Screen size: 256 x 256 pixels, 60 FPS.
 - Each character is 4 x 6 pixels. The text screen is **64 columns x 42 rows**.
-- On startup, a banner and the prompt `]` appear. Type lines or commands at the prompt.
+- The screen is a full-screen editor: text written to it stays, and a single
+  cursor is shared by output (`PRINT` flows from it, `LOCATE` moves it) and editing.
+
+### 2.1 Screen Editing
+
+Move the cursor anywhere with the arrow keys and edit in place; pressing Enter
+submits the **logical line** under the cursor (a logical line may wrap across
+several screen rows). This makes the classic edit-by-`LIST` workflow possible:
+`LIST` the program, move the cursor up to a line, change part of it, and press
+Enter to update that line.
+
+| Key | Action |
+|---|---|
+| Arrow keys | Move the cursor |
+| Printable keys | Type a character at the cursor |
+| `Insert` | Toggle insert / overtype mode (the cursor shape changes: underline = insert, box = overtype) |
+| `Backspace` | Delete the character before the cursor |
+| `Delete` | Delete the character at the cursor |
+| `Home` / `End` | Move to the start / end of the logical line |
+| `Enter` | Submit the logical line under the cursor, then move down one logical line |
 
 ---
 
@@ -59,14 +78,15 @@ python main.py hello      load samples/hello.bas on startup
 
 ### 3.1 Entering and Editing Lines
 
-Input at the prompt `]` is handled according to its content.
+When Enter is pressed, the logical line under the cursor is handled according to
+its content.
 
 | Input | Behavior |
 |---|---|
 | Line number + statement (e.g. `10 PRINT "HI"`) | Stores a program line at that line number |
 | Re-entering the same line number | Overwrites that line |
 | Line number only (e.g. `10`) | Deletes that line |
-| Statement / command only (no line number) | Executes immediately as a direct command |
+| Statement / command only (no line number) | Executes immediately as a direct command (output flows from the cursor) |
 
 ### 3.2 Run Model
 
@@ -74,7 +94,7 @@ Input at the prompt `]` is handled according to its content.
 - Execution advances up to 800 statements per frame. When it reaches a frame-break statement such as `PRINT`, or a `VSYNC`, it ends execution for that frame and continues on the next frame (see [Frame Control](#10-frame-control-vsync)).
 - When `INPUT` is reached, execution waits for input; it resumes after the user types a line and presses Enter.
 - When `END` / `STOP` is reached, or the last line is passed, execution ends, `OK` is displayed, and it returns to edit mode.
-- If an error occurs during execution, `?ERROR in <line>: <message>` is displayed and execution stops.
+- If an error occurs during execution, `?ERROR <code> in line <line>: <message>` is displayed and execution stops (see Section 13 for codes).
 
 ---
 
@@ -518,28 +538,44 @@ In edit mode, type with character keys, delete one character with Backspace, and
 
 ## 13. Error Messages
 
-Errors during execution are shown as `?ERROR in <line>: <message>`, and during direct execution as `?ERROR: <message>`. The main messages:
+Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, and during direct execution as `?ERROR <code>: <message>`. Each error has a numeric code, grouped by hundreds: 1xx syntax/parse, 2xx type, 3xx runtime/control flow, 4xx array/data, 5xx file/command. Codes and messages are defined in one place, `pyxelbasic/errors.py`.
 
-| Message | Common cause |
-|---|---|
-| `Unterminated string` | A `"` is not closed |
-| `Invalid character: 'x'` | An uninterpretable character |
-| `Invalid expression` | A syntax error in an expression |
-| `Number required` | A string was used in a numeric operation |
-| `Type mismatch in comparison` | A number was compared with a string |
-| `Division by zero` | Division by 0 (`/` or `MOD`) |
-| `Expected '='` | No `=` in an assignment |
-| `Expected THEN` | No `THEN` in an `IF` |
-| `Expected TO in FOR` | Syntax error in a `FOR` |
-| `NEXT without FOR` | An extra `NEXT` |
-| `RETURN without GOSUB` | An extra `RETURN` |
-| `Line n not found` | The jump target line does not exist |
-| `Subscript out of range: name` | Array subscript out of range |
-| `Out of DATA` | `DATA` has been exhausted |
-| `Cannot assign string to numeric variable: name` | Type mismatch |
-| `Unsupported statement: x` / `Unsupported function: x` | An unimplemented keyword |
-| `VSYNC: keyword required` / `VSYNC: ON or OFF required` | Syntax error in `VSYNC` |
-| `?FILE NOT FOUND "name"` | The `LOAD` target file does not exist |
+| Code | Message | Common cause |
+|---|---|---|
+| 101 | `Syntax error` | A line that is not a valid statement (e.g. arbitrary text, or an implied assignment with no `=`) |
+| 102 | `Unsupported statement: x` | An unimplemented statement keyword |
+| 103 | `Invalid expression` | A syntax error in an expression |
+| 104 | `Expected '('` | A `(` was required |
+| 105 | `Expected ')'` | A `)` was required |
+| 106 | `Expected '='` | No `=` in an assignment |
+| 107 | `Assignment target is not a variable` | Left side of `=` is not a variable |
+| 108 | `Expected THEN` | No `THEN` in an `IF` |
+| 109 | `Nothing after THEN` | `IF ... THEN` with nothing after `THEN` |
+| 110 | `Missing FOR variable` | `FOR` without a loop variable |
+| 111 | `Expected '=' in FOR` | Syntax error in a `FOR` |
+| 112 | `Expected TO in FOR` | Syntax error in a `FOR` |
+| 113 | `Invalid DIM syntax` | Syntax error in a `DIM` |
+| 114 | `Invalid LOCATE syntax` | Syntax error in a `LOCATE` |
+| 115 | `Invalid LINE syntax ('-' required)` | Syntax error in a `LINE` |
+| 116 | `VSYNC: keyword required` | A `VSYNC` form needs a keyword |
+| 117 | `VSYNC: ON or OFF required` | `VSYNC <word>` needs `ON`/`OFF` |
+| 118 | `Unterminated string` | A `"` is not closed |
+| 119 | `Invalid character: 'x'` | An uninterpretable character |
+| 120 | `Invalid comparison operator` | Internal: bad comparison operator |
+| 201 | `Number required` | A string was used in a numeric operation |
+| 202 | `Type mismatch in comparison` | A number was compared with a string |
+| 203 | `Cannot assign string to numeric variable: name` | Type mismatch on assignment |
+| 301 | `Division by zero` | Division by 0 (`/` or `MOD`) |
+| 302 | `Line n not found` | The jump target line does not exist |
+| 303 | `RETURN without GOSUB` | An extra `RETURN` |
+| 304 | `NEXT without FOR` | An extra `NEXT` |
+| 305 | `NEXT name without FOR` | `NEXT var` with no matching `FOR` |
+| 401 | `Subscript out of range: name` | Array subscript out of range |
+| 402 | `Out of DATA` | `DATA` has been exhausted |
+| 501 | `SAVE requires a file name` | `SAVE` without a file name |
+| 502 | `LOAD requires a file name` | `LOAD` without a file name |
+
+`?FILE NOT FOUND "name"` is a separate notice printed by `LOAD` when the file is missing; it is not a coded error.
 
 ---
 

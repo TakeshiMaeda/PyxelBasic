@@ -8,15 +8,11 @@ depend on Pyxel (easy to test or to swap the console out).
 
 import random
 
+from .errors import BasicError, Err
 from .keywords import (
     STATEMENT_HANDLERS, FUNCTION_HANDLERS, MATH1,
     FRAME_BREAK, KEYWORDS, WORD_OPS, FUNCTIONS,
 )
-
-
-class BasicError(Exception):
-    """Runtime / syntax error."""
-    pass
 
 
 # Reserved-word definitions (keyword sets, handler maps, the math table and the
@@ -52,7 +48,7 @@ def tokenize(src):
                 buf.append(src[j])
                 j += 1
             if j >= n:
-                raise BasicError("Unterminated string")
+                raise BasicError(Err.UNTERMINATED_STRING)
             tokens.append(("STR", "".join(buf)))
             i = j + 1
             continue
@@ -116,7 +112,7 @@ def tokenize(src):
             tokens.append(("SEMI", c)); i += 1; continue
         if c == ":":
             tokens.append(("COLON", c)); i += 1; continue
-        raise BasicError("Invalid character: '%s'" % c)
+        raise BasicError(Err.INVALID_CHAR, c)
     return tokens
 
 
@@ -165,7 +161,7 @@ class Evaluator:
 
     def expect_rp(self):
         if self.peek()[0] != "RP":
-            raise BasicError("Expected ')'")
+            raise BasicError(Err.EXPECTED_RPAREN)
         self.advance()
 
     # From lowest precedence downward
@@ -230,11 +226,11 @@ class Evaluator:
                 left = a * b
             elif op == "/":
                 if b == 0:
-                    raise BasicError("Division by zero")
+                    raise BasicError(Err.DIVISION_BY_ZERO)
                 left = a / b
             else:  # MOD
                 if b == 0:
-                    raise BasicError("Division by zero")
+                    raise BasicError(Err.DIVISION_BY_ZERO)
                 left = int(a) % int(b)
         return left
 
@@ -276,12 +272,12 @@ class Evaluator:
                 idx = self.parse_arglist()
                 return self.interp.get_array(name, idx)
             return self.interp.get_var(name)
-        raise BasicError("Invalid expression")
+        raise BasicError(Err.INVALID_EXPRESSION)
 
     def parse_arglist(self):
         """Read ( arg, arg, ... ) and return a list of values."""
         if self.peek()[0] != "LP":
-            raise BasicError("Expected '('")
+            raise BasicError(Err.EXPECTED_LPAREN)
         self.advance()
         args = []
         if self.peek()[0] != "RP":
@@ -366,13 +362,13 @@ class Evaluator:
     # --- Helpers ---
     def _num(self, v):
         if isinstance(v, str):
-            raise BasicError("Number required")
+            raise BasicError(Err.NUMBER_REQUIRED)
         return v
 
     def _compare(self, a, op, b):
         # When types are mixed, only string-to-string comparison is allowed
         if isinstance(a, str) != isinstance(b, str):
-            raise BasicError("Type mismatch in comparison")
+            raise BasicError(Err.TYPE_MISMATCH)
         if op == "=":
             return to_bool_num(a == b)
         if op == "<>":
@@ -385,7 +381,7 @@ class Evaluator:
             return to_bool_num(a > b)
         if op == ">=":
             return to_bool_num(a >= b)
-        raise BasicError("Invalid comparison operator")
+        raise BasicError(Err.INVALID_COMPARISON_OP)
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +523,7 @@ class Interpreter:
         if name.endswith("$") and not isinstance(value, str):
             value = basic_str(value)
         if not name.endswith("$") and isinstance(value, str):
-            raise BasicError("Cannot assign string to numeric variable: %s" % name)
+            raise BasicError(Err.STRING_TO_NUMERIC, name)
         self.vars[name] = value
 
     def dim_array(self, name, dims):
@@ -564,7 +560,7 @@ class Interpreter:
         try:
             self.execute(toks)
         except BasicError as e:
-            self.io.print_line("?ERROR in %d: %s" % (line_no, e))
+            self.io.print_line("?ERROR %d in line %d: %s" % (int(e.code), line_no, e))
             self.state = "EDIT"
             return
         if self.state == "RUN" and not self.jumped:
@@ -579,11 +575,11 @@ class Interpreter:
             self._do_assign(toks, 0)
             return
         if kind != "KW":
-            raise BasicError("Invalid statement")
+            raise BasicError(Err.SYNTAX_ERROR)
 
         handler = self._stmt_dispatch.get(val)
         if handler is None:
-            raise BasicError("Unsupported statement: %s" % val)
+            raise BasicError(Err.UNSUPPORTED_STATEMENT, val)
         handler(toks)
 
         # If this statement is a frame-break target, cut off the frame here
@@ -598,7 +594,7 @@ class Interpreter:
     def _do_assign(self, toks, start):
         # VAR [ ( idx ) ] = expr
         if toks[start][0] != "VAR":
-            raise BasicError("Assignment target is not a variable")
+            raise BasicError(Err.ASSIGN_TARGET_NOT_VAR)
         name = toks[start][1]
         pos = start + 1
         indices = None
@@ -607,7 +603,10 @@ class Interpreter:
             indices = ev.parse_arglist()
             pos = ev.pos
         if pos >= len(toks) or toks[pos] != ("OP", "="):
-            raise BasicError("Expected '='")
+            # A bare line that began with a variable but has no '=' is simply not
+            # a valid statement (e.g. arbitrary typed text). Only an explicit LET
+            # (start > 0) should complain specifically about the missing '='.
+            raise BasicError(Err.EXPECTED_EQUALS if start else Err.SYNTAX_ERROR)
         ev = Evaluator(toks, self, pos + 1)
         value = ev.parse()
         if indices is None:
@@ -706,7 +705,7 @@ class Interpreter:
 
     def _jump_to(self, line_no):
         if line_no not in self.line_index:
-            raise BasicError("Line %d not found" % line_no)
+            raise BasicError(Err.LINE_NOT_FOUND, line_no)
         self.pc = self.line_index[line_no]
         self.jumped = True
 
@@ -717,7 +716,7 @@ class Interpreter:
 
     def _do_return(self, toks):
         if not self.gosub_stack:
-            raise BasicError("RETURN without GOSUB")
+            raise BasicError(Err.RETURN_WITHOUT_GOSUB)
         self.pc = self.gosub_stack.pop()
         self.jumped = True
 
@@ -729,7 +728,7 @@ class Interpreter:
                 then_pos = i
                 break
         if then_pos is None:
-            raise BasicError("Expected THEN")
+            raise BasicError(Err.EXPECTED_THEN)
         ev = Evaluator(toks, self, 1)
         cond = ev.parse()
         truthy = bool(cond) and cond != 0
@@ -737,7 +736,7 @@ class Interpreter:
             return
         then_toks = toks[then_pos + 1:]
         if not then_toks:
-            raise BasicError("Nothing after THEN")
+            raise BasicError(Err.NOTHING_AFTER_THEN)
         # If only a number follows THEN, it is an implicit GOTO
         if then_toks[0][0] == "NUM":
             self._jump_to(int(then_toks[0][1]))
@@ -747,14 +746,14 @@ class Interpreter:
     def _do_for(self, toks):
         # FOR VAR = start TO end [STEP n]
         if toks[1][0] != "VAR":
-            raise BasicError("Missing FOR variable")
+            raise BasicError(Err.MISSING_FOR_VAR)
         var = toks[1][1]
         if toks[2] != ("OP", "="):
-            raise BasicError("Expected '=' in FOR")
+            raise BasicError(Err.EXPECTED_EQUALS_IN_FOR)
         ev = Evaluator(toks, self, 3)
         start = ev.parse()
         if ev.peek() != ("KW", "TO"):
-            raise BasicError("Expected TO in FOR")
+            raise BasicError(Err.EXPECTED_TO_IN_FOR)
         ev.advance()
         end = ev.parse()
         step = 1
@@ -769,14 +768,14 @@ class Interpreter:
 
     def _do_next(self, toks):
         if not self.for_stack:
-            raise BasicError("NEXT without FOR")
+            raise BasicError(Err.NEXT_WITHOUT_FOR)
         # NEXT [var]: if a variable is given, unwind until it matches
         if len(toks) > 1 and toks[1][0] == "VAR":
             target = toks[1][1]
             while self.for_stack and self.for_stack[-1]["var"] != target:
                 self.for_stack.pop()
             if not self.for_stack:
-                raise BasicError("NEXT %s without FOR" % target)
+                raise BasicError(Err.NEXT_VAR_WITHOUT_FOR, target)
         frame = self.for_stack[-1]
         new_val = self.get_var(frame["var"]) + frame["step"]
         self.set_var(frame["var"], new_val)
@@ -791,7 +790,7 @@ class Interpreter:
         pos = 1
         while pos < len(toks):
             if toks[pos][0] != "VAR":
-                raise BasicError("Invalid DIM syntax")
+                raise BasicError(Err.INVALID_DIM_SYNTAX)
             name = toks[pos][1]
             ev = Evaluator(toks, self, pos + 1)
             dims = ev.parse_arglist()
@@ -806,7 +805,7 @@ class Interpreter:
             if toks[pos][0] == "VAR":
                 name = toks[pos][1]
                 if self.data_ptr >= len(self.data):
-                    raise BasicError("Out of DATA")
+                    raise BasicError(Err.OUT_OF_DATA)
                 self.set_var(name, self.data[self.data_ptr])
                 self.data_ptr += 1
                 pos += 1
@@ -819,7 +818,7 @@ class Interpreter:
         ev = Evaluator(toks, self, 1)
         x = ev.parse()
         if ev.peek()[0] != "COMMA":
-            raise BasicError("Invalid LOCATE syntax")
+            raise BasicError(Err.INVALID_LOCATE_SYNTAX)
         ev.advance()
         y = ev.parse()
         self.io.locate(int(x), int(y))
@@ -841,7 +840,7 @@ class Interpreter:
         ev = Evaluator(toks, self, 1)
         p1 = ev.parse_arglist()
         if ev.peek() != ("OP", "-"):
-            raise BasicError("Invalid LINE syntax ('-' required)")
+            raise BasicError(Err.INVALID_LINE_SYNTAX)
         ev.advance()
         p2 = ev.parse_arglist()
         col = None
@@ -874,9 +873,9 @@ class Interpreter:
             return
         # Remaining form is "<word> ON|OFF". The second word must be a valid reserved word (KW token)
         if toks[1][0] != "KW":
-            raise BasicError("VSYNC: keyword required")
+            raise BasicError(Err.VSYNC_KEYWORD_REQUIRED)
         if len(toks) < 3 or toks[2][0] != "VAR" or toks[2][1] not in ("ON", "OFF"):
-            raise BasicError("VSYNC: ON or OFF required")
+            raise BasicError(Err.VSYNC_ON_OFF_REQUIRED)
         if toks[2][1] == "ON":
             self.frame_break.add(sub)
         else:
@@ -904,7 +903,7 @@ def _nd_get(data, size, indices, name):
     cur = data
     for k, idx in enumerate(indices):
         if idx < 0 or idx >= size[k]:
-            raise BasicError("Subscript out of range: %s" % name)
+            raise BasicError(Err.SUBSCRIPT_OUT_OF_RANGE, name)
         cur = cur[idx]
     return cur
 
@@ -913,11 +912,11 @@ def _nd_set(data, size, indices, value, name):
     cur = data
     for k, idx in enumerate(indices[:-1]):
         if idx < 0 or idx >= size[k]:
-            raise BasicError("Subscript out of range: %s" % name)
+            raise BasicError(Err.SUBSCRIPT_OUT_OF_RANGE, name)
         cur = cur[idx]
     last = indices[-1]
     if last < 0 or last >= size[-1]:
-        raise BasicError("Subscript out of range: %s" % name)
+        raise BasicError(Err.SUBSCRIPT_OUT_OF_RANGE, name)
     cur[last] = value
 
 

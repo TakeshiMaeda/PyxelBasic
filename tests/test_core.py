@@ -385,6 +385,26 @@ def test_dispatch_registration():
     check("dispatch functions set", FUNCTIONS, expected_functions)
 
 
+def test_alltest_sample():
+    # Run the bundled all-command sample headlessly and require every self-check
+    # to pass (F == 0) with no error lines. Keeps the sample honest over time.
+    path = os.path.join(os.path.dirname(__file__), "..", "samples", "alltest.bas")
+    lines = []
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            s = raw.strip()
+            if s and s[0].isdigit():
+                i = 0
+                while i < len(s) and s[i].isdigit():
+                    i += 1
+                lines.append((int(s[:i]), s[i:].strip()))
+    io, interp = run_program(lines, inputs=["TEST"])
+    check("alltest reaches END", interp.state, "END")
+    check("alltest no failures (F=0)", interp.get_var("F"), 0)
+    bad = [s for s in io.out if s.startswith("NG") or "ERROR" in s]
+    check("alltest no NG/ERROR lines", bad, [])
+
+
 def main():
     for fn in [
         test_tokenize, test_print_expr, test_for_next, test_for_step,
@@ -394,7 +414,7 @@ def main():
         test_frame_break_flags, test_vsync_config_off_on,
         test_vsync_bad_word, test_vsync_list, test_vsync_reset,
         test_new_resets_framebreak, test_renum,
-        test_dispatch_registration,
+        test_dispatch_registration, test_alltest_sample,
     ]:
         print(fn.__name__)
         fn()
