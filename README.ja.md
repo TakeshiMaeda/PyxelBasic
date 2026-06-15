@@ -135,6 +135,10 @@ python tests/test_core.py
 
 詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「未実装・制限事項」を参照してください。
 
+## 変更履歴
+
+リリース履歴は [CHANGELOG.ja.md](CHANGELOG.ja.md) を参照してください。
+
 ## ライセンス
 
 [MIT License](LICENSE) で公開しています。

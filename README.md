@@ -136,6 +136,10 @@ This covers lexing, expression evaluation, control structures, arrays, string fu
 
 For details, see "Not Yet Implemented" in [docs/REFERENCE.md](docs/REFERENCE.md).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## License
 
 Released under the [MIT License](LICENSE).
