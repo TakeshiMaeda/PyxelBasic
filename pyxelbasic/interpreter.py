@@ -116,6 +116,40 @@ def tokenize(src):
     return tokens
 
 
+def split_statements(toks):
+    """Split a line's token list into separate statements at top-level COLON.
+
+    Most ':' tokens are statement separators. Two keywords instead consume the
+    rest of the line as a single statement (no further splitting):
+      IF   - its THEN / ELSE / ':' clauses are handled inside _do_if.
+      DATA - reads to end of line (matches _collect_data).
+    (REM never reaches here: the tokenizer stops at REM and emits no COLON.)
+
+    Empty statements (a leading / trailing ':' or '::') are skipped.
+    """
+    stmts = []
+    cur = []
+    i = 0
+    n = len(toks)
+    while i < n:
+        kind, val = toks[i]
+        if not cur and kind == "KW" and val in ("IF", "DATA"):
+            # This statement takes the entire remainder of the line.
+            stmts.append(toks[i:])
+            return stmts
+        if kind == "COLON":
+            if cur:
+                stmts.append(cur)
+                cur = []
+            i += 1
+            continue
+        cur.append(toks[i])
+        i += 1
+    if cur:
+        stmts.append(cur)
+    return stmts
+
+
 def normalize_line(text):
     """Upper-case the code part of a source line for storage.
 
@@ -538,10 +572,22 @@ class Interpreter:
     def prepare_run(self):
         self.reset_runtime()
         self.code = []
+        # Flatten the program into one entry per statement. A line with ':' yields
+        # several entries; the program counter is therefore statement-granular, so
+        # FOR/NEXT, GOSUB/RETURN and GOTO all work within a single line.
         for ln in sorted(self.program):
             toks = tokenize(self.program[ln])
-            self.code.append((ln, toks))
-        self.line_index = {ln: i for i, (ln, _) in enumerate(self.code)}
+            stmts = split_statements(toks)
+            if not stmts:
+                # Keep empty / REM-only lines addressable (e.g. as a GOTO target).
+                stmts = [[]]
+            for stmt in stmts:
+                self.code.append((ln, stmt))
+        # A line number maps to the index of its FIRST statement.
+        self.line_index = {}
+        for i, (ln, _) in enumerate(self.code):
+            if ln not in self.line_index:
+                self.line_index[ln] = i
         self._collect_data()
         self.pc = 0
         self.state = "RUN"
@@ -770,7 +816,7 @@ class Interpreter:
         self.jumped = True
 
     def _do_if(self, toks):
-        # IF <expr> THEN <then part>
+        # IF <expr> THEN <then part> [ELSE <else part>]
         then_pos = None
         for i, t in enumerate(toks):
             if t == ("KW", "THEN"):
@@ -778,19 +824,42 @@ class Interpreter:
                 break
         if then_pos is None:
             raise BasicError(Err.EXPECTED_THEN)
+        # The first ELSE after THEN ends the then-clause. (A nested IF...THEN...
+        # ELSE on one line binds the ELSE to the outer IF; best-effort only.)
+        else_pos = None
+        for i in range(then_pos + 1, len(toks)):
+            if toks[i] == ("KW", "ELSE"):
+                else_pos = i
+                break
         ev = Evaluator(toks, self, 1)
         cond = ev.parse()
         truthy = bool(cond) and cond != 0
-        if not truthy:
-            return
-        then_toks = toks[then_pos + 1:]
-        if not then_toks:
-            raise BasicError(Err.NOTHING_AFTER_THEN)
-        # If only a number follows THEN, it is an implicit GOTO
-        if then_toks[0][0] == "NUM":
-            self._jump_to(int(then_toks[0][1]))
+        if truthy:
+            end = else_pos if else_pos is not None else len(toks)
+            clause = toks[then_pos + 1:end]
+        elif else_pos is not None:
+            clause = toks[else_pos + 1:]
         else:
-            self.execute(then_toks)
+            return
+        if not clause:
+            raise BasicError(Err.NOTHING_AFTER_THEN)
+        # A leading number means an implicit GOTO.
+        if clause[0][0] == "NUM":
+            self._jump_to(int(clause[0][1]))
+        else:
+            self._run_stmt_seq(clause)
+
+    def _run_stmt_seq(self, toks):
+        """Run a token list that may hold several ':'-separated statements.
+
+        Used for the THEN / ELSE clauses of IF and for direct-mode input. Stops
+        early if a statement transfers control (GOTO/GOSUB/RETURN/NEXT/implicit
+        GOTO) or ends the program, so the rest of the line is not executed.
+        """
+        for stmt in split_statements(toks):
+            self.execute(stmt)
+            if self.jumped or self.state != "RUN":
+                break
 
     def _do_for(self, toks):
         # FOR VAR = start TO end [STEP n]

@@ -163,6 +163,70 @@ def test_if_implicit_goto():
     check("if implicit goto", io.out[0], "YES")
 
 
+def test_if_else():
+    io, _ = run_program([
+        (10, 'IF 1 = 1 THEN PRINT "T1" ELSE PRINT "F1"'),
+        (20, 'IF 1 = 0 THEN PRINT "T2" ELSE PRINT "F2"'),
+    ])
+    check("if-else true branch", io.out[0], "T1")
+    check("if-else false branch", io.out[1], "F2")
+
+
+def test_if_else_implicit_goto():
+    io, _ = run_program([
+        (10, 'LET A = 0'),
+        (20, 'IF A = 1 THEN 50 ELSE 40'),
+        (30, 'PRINT "NO"'),
+        (40, 'PRINT "ELSEGOTO"'),
+        (45, 'GOTO 60'),
+        (50, 'PRINT "THENGOTO"'),
+        (60, 'END'),
+    ])
+    check("if-else implicit goto", io.out[0], "ELSEGOTO")
+
+
+def test_multi_statement_seq():
+    io, interp = run_program([
+        (10, 'A = 1 : B = 2 : PRINT A + B'),
+    ])
+    check("colon sequence", io.out[0], "3")
+    check("colon vars set", (interp.get_var("A"), interp.get_var("B")), (1, 2))
+
+
+def test_multi_statement_for_next():
+    io, _ = run_program([
+        (10, 'FOR I = 1 TO 3 : PRINT I; : NEXT'),
+    ])
+    check("one-line for/next", io.out[0], "123")
+
+
+def test_multi_statement_gosub_continue():
+    io, _ = run_program([
+        (10, 'GOSUB 100 : PRINT "BACK" : END'),
+        (100, 'PRINT "SUB" : RETURN'),
+    ])
+    check("gosub mid-line continue", io.out[:2], ["SUB", "BACK"])
+
+
+def test_if_then_multi_and_false_skips_rest():
+    io, interp = run_program([
+        (10, 'V = 0 : IF 1 = 1 THEN V = 1 : V = V + 1'),
+        (20, 'W = 0 : IF 1 = 0 THEN W = 9 : W = W + 9'),
+        (30, 'PRINT V; W'),
+    ])
+    # then-clause runs both statements; false IF skips the rest of its clause
+    check("if-then multi true", interp.get_var("V"), 2)
+    check("if-then false skips clause", interp.get_var("W"), 0)
+
+
+def test_multi_statement_data_unaffected():
+    io, _ = run_program([
+        (10, 'DATA 11, 22, 33'),
+        (20, 'READ P : READ Q : PRINT P + Q'),
+    ])
+    check("data with colon read", io.out[0], "33")
+
+
 def test_string_funcs():
     io, _ = run_program([
         (10, 'LET A$ = "PYXELBASIC"'),
@@ -462,7 +526,12 @@ def test_alltest_sample():
 def main():
     for fn in [
         test_tokenize, test_print_expr, test_for_next, test_for_step,
-        test_if_goto, test_if_implicit_goto, test_string_funcs,
+        test_if_goto, test_if_implicit_goto,
+        test_if_else, test_if_else_implicit_goto, test_multi_statement_seq,
+        test_multi_statement_for_next, test_multi_statement_gosub_continue,
+        test_if_then_multi_and_false_skips_rest,
+        test_multi_statement_data_unaffected,
+        test_string_funcs,
         test_array, test_array_2d, test_gosub, test_data_read,
         test_input, test_logical, test_graphics, test_vsync,
         test_frame_break_flags, test_vsync_config_off_on,

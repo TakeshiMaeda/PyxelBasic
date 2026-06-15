@@ -209,10 +209,11 @@ class App:
         elif (kind, val) == ("KW", "LOAD"):
             self._cmd_load(toks)
         else:
-            # Execute PRINT, assignments, etc. on the spot (direct execution)
+            # Execute PRINT, assignments, etc. on the spot (direct execution).
+            # _run_stmt_seq allows several ':'-separated statements on one line.
             self.interp.state = "RUN"
             self.interp.jumped = False
-            self.interp.execute(toks)
+            self.interp._run_stmt_seq(toks)
             self.interp.state = "EDIT"
 
     def _cmd_list(self, toks):

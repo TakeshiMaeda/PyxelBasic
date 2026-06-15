@@ -102,6 +102,27 @@ function names, operators). String literals (`"..."`) and the comment text after
 - Pressing **Ctrl+C** during a run (or while waiting for `INPUT`) interrupts it: `BREAK in line <line>` is displayed and it returns to edit mode. The program is kept, so you can edit and re-run.
 - If an error occurs during execution, `?ERROR <code> in line <line>: <message>` is displayed and execution stops (see Section 13 for codes).
 
+### 3.3 Multiple Statements (`:`)
+
+Several statements can be placed on one line, separated by `:`, and run left to right.
+
+```basic
+10 A = 1 : B = 2 : PRINT A + B
+20 FOR I = 1 TO 3 : PRINT I; : NEXT
+```
+
+- During `RUN` the program counter is **statement-granular**, so a one-line
+  `FOR ... : ... : NEXT` loop, and continuing the rest of the line after a
+  `GOSUB` returns (`GOSUB 100 : PRINT "BACK"`), both work correctly.
+- When a jump occurs (`GOTO` / implicit GOTO / `RETURN` / a looping `NEXT`), the
+  remaining statements on that line are not executed.
+- Direct mode also runs `:`-separated statements in sequence, but because it has
+  no `code` / program counter, **one-line `FOR`/`NEXT` loops do not work in
+  direct mode** (only during `RUN`).
+- `IF`, `DATA`, and text after `REM` each take **the rest of the line** as one
+  statement (`IF` claims its `THEN` / `ELSE` clauses, `DATA` its data list, and
+  `REM` the comment).
+
 ---
 
 ## 4. Direct Commands
@@ -266,19 +287,26 @@ RETURN
 ```
 `GOSUB` calls a subroutine; `RETURN` returns to the line after the call. Nesting is allowed.
 
-### IF ... THEN
+### IF ... THEN [... ELSE ...]
 ```
-IF condition THEN line-number
-IF condition THEN statement
+IF condition THEN line-number | statement [: statement ...] [ELSE line-number | statement [: statement ...]]
 ```
-- When the condition is true (non-zero), the part after `THEN` is executed.
-- If only a line number follows `THEN`, it jumps to that line (implicit GOTO).
-- If a statement follows `THEN`, that statement is executed.
-- `ELSE` is **not supported**.
+- When the condition is true (non-zero), the `THEN` side runs; when false, the
+  `ELSE` side runs. `ELSE` is optional.
+- If a side is only a line number, it jumps to that line (implicit GOTO).
+- Each side may hold several statements separated by `:` (see
+  [Multiple Statements](#33-multiple-statements-)).
+- `IF` claims **the rest of the line** as its `THEN` / `ELSE` clauses, so you
+  cannot append another `:`-separated statement after an `IF` (it would become
+  part of the clause).
+- For a nested `IF ... THEN IF ... THEN ... ELSE ...` on one line, which `IF` the
+  `ELSE` binds to is not guaranteed (best-effort; split into separate lines to be
+  sure).
 
 ```basic
 10 IF A = 0 THEN 100
-20 IF A > 0 THEN PRINT "PLUS"
+20 IF A > 0 THEN PRINT "PLUS" ELSE PRINT "MINUS OR ZERO"
+30 IF A > 0 THEN B = 1 : C = 2 ELSE B = 0 : C = 0
 ```
 
 ### FOR ... NEXT
@@ -590,7 +618,7 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 
 Items not yet supported in the current prototype:
 
-- **Control structures**: `ELSE` (the false branch of `IF`), multi-statement lines (`:`), `WHILE`/`DO`
+- **Control structures**: `WHILE`/`DO`
 - **Graphics**: `BOX`, `CIRCLE`, `FILLCIRCLE`, `SPRITE`, `SPRITEDEF`, `PCG`, `PALETTE`
 - **Sound**: `PLAY` (MML), `MUSIC`
 - **String escapes**: `\n` `\l` `\t` `\cN`, retro-style newline via `CHR$(12)`, the `\cN` escape for `COLOR`
