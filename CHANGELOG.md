@@ -16,13 +16,6 @@ While the project is a `0.0.x` prototype, breaking changes may occur between rel
 - Multiple statements per line separated by `:`. The program counter is
   statement-granular during `RUN`, so a one-line `FOR ... : ... : NEXT` loop and
   continuing a line after `GOSUB` returns (`GOSUB 100 : PRINT "BACK"`) both work.
-- `samples/meteo.bas`: dodge meteors falling from the top with the arrow keys
-  (no collision detection).
-
-### Changed
-- Documentation: rewrote the READMEs for the full-screen editor (dropped the
-  obsolete `]` prompt; documented in-place editing and `Ctrl+C` interrupt) and
-  added the editor to the feature list. Listed every bundled sample.
 
 ### Known limitations
 - One-line `FOR`/`NEXT` loops do not work in direct mode (only during `RUN`).
@@ -31,66 +24,23 @@ While the project is a `0.0.x` prototype, breaking changes may occur between rel
 
 ## [0.0.5] - 2026-06-14
 
-### Added
-- `--showfps` option: show the window's real frame rate in the title bar
-  (updated about twice a second). No measurement overhead when omitted.
+Initial public release.
 
-### Changed
-- Upper-case the code part of a line on entry, while keeping string literals and
-  `REM` comment text as typed.
-- `RENUM` keeps `REM` lines.
-- Renamed `samples/game.bas` to `samples/stick.bas`.
-
-## [0.0.4] - 2026-06-14
-
-### Added
-- `Ctrl+C` interrupts a running program (or an `INPUT` wait): `BREAK in line N`
-  is shown and control returns to edit mode with the program intact.
-- `Esc` opens a quit-confirmation dialog (`Y` quits, `N`/`Esc` cancels); Pyxel's
-  built-in Esc-to-quit is disabled.
-- `VSYNC CLEAR` drops every automatic frame-break target (only an explicit
-  `VSYNC` breaks afterwards).
-
-### Changed
-- Optimized text rendering: text is drawn from a baked image with a dirty flag,
-  so a normal frame is two `blt`s instead of thousands of per-character calls.
-  The per-frame cost stays constant as the screen fills.
-
-### Fixed
-- `MOD` by a fraction (`0 < |b| < 1`) integerized the divisor to 0 and crashed
-  with a Python `ZeroDivisionError`; it now raises a BASIC division error.
-
-## [0.0.3] - 2026-06-14
-
-### Added
-- Full-screen screen editor: a single cursor is shared by output and editing
-  (`PRINT` flows from it, `LOCATE` moves it). Arrow keys, `Home`/`End`,
-  insert/overtype (toggled with `Insert`), `Backspace` and `Delete` edit in
-  place; logical lines wrap and reflow. `Enter` submits the logical line under
-  the cursor. The `]` prompt was removed.
-- Startup options via `argparse` in `main.py`: `--load`, `--workdir` (fixed
-  SAVE/LOAD directory), `--run`, `--version`, plus a positional shorthand. The
-  version string lives in `pyxelbasic/version.py` and `App` is imported lazily,
-  so `--version` needs neither Pyxel nor a display.
-- Coded error system: every message lives in `pyxelbasic/errors.py` as a single
-  source of truth, grouped by hundreds and shown in the output.
-- `samples/alltest.bas`: a self-checking program that exercises every statement
-  and function; it is also run from the test suite.
-
-### Changed
-- A bare line that is not a valid statement reports a syntax error instead of
-  `Expected '='`.
-
-## [0.0.1] - 2026-06-14
-
-### Added
-- Initial prototype of the line-numbered BASIC interpreter on Pyxel
-  (work in progress).
-- Data-driven keyword dispatch: reserved words map to handler methods in
-  `pyxelbasic/keywords.py` as the single source of truth.
+- Line-numbered, classic-style BASIC interpreter running on Pyxel.
+- Full-screen editor with in-place editing (arrow keys, `Home`/`End`,
+  insert/overtype, `Backspace`/`Delete`, logical-line reflow); `Enter` submits
+  the logical line under the cursor.
+- Control flow: `GOTO`, `GOSUB`/`RETURN`, `IF...THEN`, `FOR...NEXT`.
+- Numeric and string variables, and multi-dimensional arrays.
+- Built-in functions for strings, math, random numbers, and input.
+- Point and line graphics plus a text screen; flexible frame control with
+  `VSYNC` (sync points can be toggled per keyword).
+- `DATA`/`READ`/`RESTORE`; `SAVE`/`LOAD` programs to files.
+- Startup options (`--load`, `--workdir`, `--run`, `--showfps`, `--version`) and
+  coded error messages.
+- `Ctrl+C` interrupts a running program; `Esc` shows a quit-confirmation dialog.
+- Bundled samples (`hello`, `count`, `graph`, `stick`, `meteo`, `alltest`) and a
+  headless test suite.
 
 [Unreleased]: https://github.com/TakeshiMaeda/PyxelBasic/compare/v0.0.5...HEAD
 [0.0.5]: https://github.com/TakeshiMaeda/PyxelBasic/releases/tag/v0.0.5
-[0.0.4]: https://github.com/TakeshiMaeda/PyxelBasic/releases/tag/v0.0.4
-[0.0.3]: https://github.com/TakeshiMaeda/PyxelBasic/releases/tag/v0.0.3
-[0.0.1]: https://github.com/TakeshiMaeda/PyxelBasic/releases/tag/v0.0.1
