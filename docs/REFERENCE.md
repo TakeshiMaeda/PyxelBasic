@@ -36,7 +36,7 @@ Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 PyxelBasic is a line-numbered, classic-style BASIC interpreter that runs on Pyxel.
 
 - Line numbers are required. The program runs in line-number order.
-- One statement per line (multi-statement `:` is not supported).
+- Multiple statements can be placed on one line, separated by `:`.
 - Case-insensitive (`print` and `PRINT` are the same). Statement, function, and variable names are uppercased internally.
 - Programs can be saved to and loaded from text files (`.bas`).
 

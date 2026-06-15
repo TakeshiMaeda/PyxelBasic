@@ -11,7 +11,7 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 
 - Full-screen editor: move the cursor anywhere and edit lines in place (insert / overtype, Home/End, Backspace/Delete)
 - Line-numbered program editing (insert / overwrite / delete, `LIST` / `RENUM`)
-- Control structures such as `GOTO` / `GOSUB` / `IF...THEN` / `FOR...NEXT`
+- Control structures such as `GOTO` / `GOSUB` / `IF...THEN...ELSE` / `FOR...NEXT`
 - Numeric and string variables, and multi-dimensional arrays
 - Built-in functions for strings, math, random numbers, and input
 - Point and line graphics plus a text screen
@@ -97,7 +97,7 @@ For the **complete reference** of implemented statements, functions, and operato
 
 Main elements:
 
-- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON`
 - Operators: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
@@ -131,7 +131,6 @@ This covers lexing, expression evaluation, control structures, arrays, string fu
 
 - Graphics: `BOX` / `CIRCLE` / `FILLCIRCLE` / `SPRITE` / `SPRITEDEF` / `PCG` / `PALETTE`
 - Sound: `PLAY` (MML)
-- Control structures: `ELSE`, multi-statement lines (`:`)
 - String escapes (`\n`, `\cN`, etc.), Japanese fonts
 
 For details, see "Not Yet Implemented" in [docs/REFERENCE.md](docs/REFERENCE.md).

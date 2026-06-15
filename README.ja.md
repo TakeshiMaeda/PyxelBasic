@@ -11,7 +11,7 @@
 
 - フルスクリーンエディタ：カーソルを自由に動かして行をその場で編集（挿入／上書き、Home/End、Backspace/Delete）
 - 行番号方式のプログラム編集（入力・上書き・削除、`LIST` / `RENUM`）
-- `GOTO` / `GOSUB` / `IF...THEN` / `FOR...NEXT` などの制御構造
+- `GOTO` / `GOSUB` / `IF...THEN...ELSE` / `FOR...NEXT` などの制御構造
 - 数値・文字列の変数と多次元配列
 - 文字列・数学・乱数・入力の組み込み関数
 - 点・線のグラフィック描画とテキスト画面
@@ -96,7 +96,7 @@ RUN
 
 主な要素:
 
-- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON`
 - 演算子: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
@@ -130,7 +130,6 @@ python tests/test_core.py
 
 - グラフィック: `BOX` / `CIRCLE` / `FILLCIRCLE` / `SPRITE` / `SPRITEDEF` / `PCG` / `PALETTE`
 - サウンド: `PLAY`（MML）
-- 制御構造: `ELSE`、マルチステートメント（`:`）
 - 文字列エスケープ（`\n` `\cN` など）、日本語フォント
 
 詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「未実装・制限事項」を参照してください。
