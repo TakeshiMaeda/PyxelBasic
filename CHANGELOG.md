@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.6
 - Added `ELSE` support to `IF ... THEN`
 - Added one-line multiple statements separated by `:`
 - Added `RESTORE line`

@@ -5,7 +5,7 @@ English | [日本語](REFERENCE.ja.md)
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
-- Target version: prototype v0.0.5
+- Target version: prototype v0.0.6
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 

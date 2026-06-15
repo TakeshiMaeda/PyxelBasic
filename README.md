@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is a prototype (v0.0.5).
+> This is a prototype (v0.0.6).
 
 ## Features
 
