@@ -561,6 +561,7 @@ class Interpreter:
         self.gosub_stack = []
         self.data = []
         self.data_ptr = 0
+        self.data_lines = {}    # DATA line number -> start index into self.data
         self.code = []          # [(line number, token list)]
         self.line_index = {}    # line number -> index into code
         self.pc = 0
@@ -593,19 +594,49 @@ class Interpreter:
         self.state = "RUN"
 
     def _collect_data(self):
-        """Collect DATA statements ahead of time."""
+        """Collect DATA statements ahead of time.
+
+        Each comma-separated item must be a numeric literal (with an optional
+        leading + / - sign) or a quoted string. Unquoted text such as
+        ``DATA HELLO`` is rejected with a clear error instead of being silently
+        dropped (which used to surface later as a confusing "Out of DATA").
+        """
         self.data = []
+        self.data_lines = {}
         for ln, toks in self.code:
-            if toks and toks[0] == ("KW", "DATA"):
-                i = 1
-                while i < len(toks):
-                    kind, val = toks[i]
-                    if kind in ("NUM", "STR"):
-                        self.data.append(val)
-                    i += 1
-                    # Skip the comma
-                    if i < len(toks) and toks[i][0] == "COMMA":
-                        i += 1
+            if not (toks and toks[0] == ("KW", "DATA")):
+                continue
+            body = toks[1:]
+            if not body:
+                continue            # bare DATA: no items
+            # Remember where this line's data starts so RESTORE <line> can seek
+            # to it (first DATA statement on a line wins).
+            self.data_lines.setdefault(ln, len(self.data))
+            # Split the body on top-level commas into items, then convert each.
+            item = []
+            for t in body:
+                if t[0] == "COMMA":
+                    self.data.append(self._data_value(item))
+                    item = []
+                else:
+                    item.append(t)
+            self.data.append(self._data_value(item))
+
+    @staticmethod
+    def _data_value(item):
+        """Convert one DATA item (a run of tokens) into its stored value.
+
+        Accepts a quoted string, a numeric literal, or a numeric literal with a
+        single leading + / - sign. Anything else is a DATA error.
+        """
+        if len(item) == 1 and item[0][0] in ("STR", "NUM"):
+            return item[0][1]
+        if (len(item) == 2 and item[0] in (("OP", "+"), ("OP", "-"))
+                and item[1][0] == "NUM"):
+            val = item[1][1]
+            return -val if item[0][1] == "-" else val
+        text = " ".join(str(v) for _, v in item) if item else "(empty)"
+        raise BasicError(Err.INVALID_DATA, text)
 
     # --- Variable access ---
     def get_var(self, name):
@@ -717,7 +748,15 @@ class Interpreter:
         pass
 
     def _do_restore(self, toks):
-        self.data_ptr = 0
+        if len(toks) > 1:
+            # RESTORE <line>: seek the data pointer to that line's DATA. The
+            # target must be a line that actually holds a DATA statement.
+            line_no = int(self._eval_from(toks, 1))
+            if line_no not in self.data_lines:
+                raise BasicError(Err.RESTORE_NO_DATA, line_no)
+            self.data_ptr = self.data_lines[line_no]
+        else:
+            self.data_ptr = 0
 
     def _do_cls(self, toks):
         self.io.cls()
@@ -922,11 +961,21 @@ class Interpreter:
         while pos < len(toks):
             if toks[pos][0] == "VAR":
                 name = toks[pos][1]
+                pos += 1
+                # An array element target: VAR ( index [, index ...] ).
+                indices = None
+                if pos < len(toks) and toks[pos][0] == "LP":
+                    ev = Evaluator(toks, self, pos)
+                    indices = ev.parse_arglist()
+                    pos = ev.pos
                 if self.data_ptr >= len(self.data):
                     raise BasicError(Err.OUT_OF_DATA)
-                self.set_var(name, self.data[self.data_ptr])
+                value = self.data[self.data_ptr]
                 self.data_ptr += 1
-                pos += 1
+                if indices is None:
+                    self.set_var(name, value)
+                else:
+                    self.set_array(name, indices, value)
             elif toks[pos][0] == "COMMA":
                 pos += 1
             else:

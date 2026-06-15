@@ -1,31 +1,15 @@
 # 変更履歴
 
-[English](CHANGELOG.md) | 日本語
+## Unreleased
+- `IF ... THEN` に `ELSE` 対応を追加
+- `:` 区切りによる 1 行複数文を追加
+- `RESTORE 行番号` を追加
+- `DATA` に定義した負数が正しく読めないバグを修正
+- `DATA` 中の引用符なしテキストは明確なエラーを出すように修正
+- `READ` で `A(I)` のような配列要素に代入できないバグを修正
 
-PyxelBasic の主な変更点をこのファイルに記録します。
 
-形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に準拠し、
-バージョンは [Semantic Versioning](https://semver.org/lang/ja/) に従います。
-本プロジェクトは `0.0.x` のプロトタイプ段階のため、リリース間で互換性のない変更が入ることがあります。
-
-## [Unreleased]
-
-### Added（追加）
-- `IF ... THEN ... ELSE ...`：`IF` の偽側に対応。各側は行番号（暗黙の `GOTO`）でも、
-  1 つ以上の命令でもよい。
-- `:` 区切りによる 1 行複数文。`RUN` 中はプログラムカウンタが文単位で進むため、
-  `FOR ... : ... : NEXT` の 1 行ループや、`GOSUB 100 : PRINT "BACK"` のように
-  `GOSUB` から戻った後の同じ行の続きも正しく実行される。
-
-### Known limitations（既知の制限）
-- ダイレクトモードでは 1 行 `FOR`/`NEXT` ループは動かない（`RUN` 中のみ）。
-- 1 行内でネストした `IF ... THEN IF ... THEN ... ELSE ...` の `ELSE` の結び付きは
-  保証しない（best-effort）。
-
-## [0.0.5] - 2026-06-14
-
-最初の公開リリース。
-
+## 0.0.5
 - Pyxel 上で動く行番号方式のクラシックスタイル BASIC インタプリタ。
 - フルスクリーンエディタによるその場編集（矢印キー・`Home`/`End`・挿入／上書き・
   `Backspace`/`Delete`・論理行のリフロー）。`Enter` でカーソル位置の論理行を投入。
@@ -40,6 +24,3 @@ PyxelBasic の主な変更点をこのファイルに記録します。
 - `Ctrl+C` で実行中断、`Esc` で終了確認ダイアログ。
 - 同梱サンプル（`hello`、`count`、`graph`、`stick`、`meteo`、`alltest`）とヘッドレス
   テストスイート。
-
-[Unreleased]: https://github.com/TakeshiMaeda/PyxelBasic/compare/v0.0.5...HEAD
-[0.0.5]: https://github.com/TakeshiMaeda/PyxelBasic/releases/tag/v0.0.5

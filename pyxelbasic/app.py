@@ -46,8 +46,12 @@ class App:
         self._banner()
         loaded = self._load_file(autoload) if autoload else False
         if autorun and loaded:
-            self.interp.prepare_run()
-            self.mode = "RUN"
+            try:
+                self.interp.prepare_run()
+                self.mode = "RUN"
+            except BasicError as e:
+                # e.g. an invalid DATA value detected while pre-collecting.
+                self.console.print_line("?ERROR %d: %s" % (int(e.code), e))
 
         pyxel.run(self.update, self.draw)
 

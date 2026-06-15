@@ -111,14 +111,11 @@ Several statements can be placed on one line, separated by `:`, and run left to 
 20 FOR I = 1 TO 3 : PRINT I; : NEXT
 ```
 
-- During `RUN` the program counter is **statement-granular**, so a one-line
-  `FOR ... : ... : NEXT` loop, and continuing the rest of the line after a
-  `GOSUB` returns (`GOSUB 100 : PRINT "BACK"`), both work correctly.
-- When a jump occurs (`GOTO` / implicit GOTO / `RETURN` / a looping `NEXT`), the
-  remaining statements on that line are not executed.
-- Direct mode also runs `:`-separated statements in sequence, but because it has
-  no `code` / program counter, **one-line `FOR`/`NEXT` loops do not work in
-  direct mode** (only during `RUN`).
+- A one-line `FOR ... : ... : NEXT` loop works, and so does continuing the rest
+  of the line after a `GOSUB` returns (`GOSUB 100 : PRINT "BACK"`).
+- After `GOTO`, `RETURN`, or `NEXT`, the remaining statements on the same line
+  are not executed.
+- In direct mode, a one-line `FOR`/`NEXT` loop does not work.
 - `IF`, `DATA`, and text after `REM` each take **the rest of the line** as one
   statement (`IF` claims its `THEN` / `ELSE` clauses, `DATA` its data list, and
   `REM` the comment).
@@ -345,11 +342,11 @@ Treats the rest of the line as a comment and ignores it.
 ```
 DATA constant [, constant ...]
 READ variable [, variable ...]
-RESTORE
+RESTORE [line]
 ```
-- `DATA` defines a list of numeric/string constants (all `DATA` lines are collected before execution).
-- `READ` reads values from `DATA` in order and assigns them to variables.
-- `RESTORE` resets the read position to the beginning.
+- `DATA` defines a list of constants (all `DATA` lines are collected before execution). Each constant must be a number (an optional leading `+`/`-` is allowed) or a quoted string; unquoted text is an error.
+- `READ` reads values from `DATA` in order and assigns them to variables (a target may also be an array element, e.g. `A(I)`).
+- `RESTORE` resets the read position to the beginning. `RESTORE line` seeks it to the `DATA` on the given line (the line must hold a `DATA` statement).
 
 ```basic
 10 DATA 10, 20, "HELLO"
@@ -393,7 +390,7 @@ Draws a line. If the color is omitted, the current `COLOR` color is used.
 ```
 RANDOMIZE [seed]
 ```
-Initializes the random number generator. If the seed is omitted, it is initialized from the current time, etc.
+Initializes the random number generator. If the seed is omitted, it is initialized from the operating system's randomness source, or from the current system time when that source is unavailable.
 
 ### VSYNC
 Frame control statement. See [Frame Control](#10-frame-control-vsync).
@@ -607,6 +604,8 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 305 | `NEXT name without FOR` | `NEXT var` with no matching `FOR` |
 | 401 | `Subscript out of range: name` | Array subscript out of range |
 | 402 | `Out of DATA` | `DATA` has been exhausted |
+| 403 | `Invalid DATA value: value` | A `DATA` item is not a number or quoted string |
+| 404 | `No DATA at line N` | `RESTORE line` target holds no `DATA` |
 | 501 | `SAVE requires a file name` | `SAVE` without a file name |
 | 502 | `LOAD requires a file name` | `LOAD` without a file name |
 
@@ -655,3 +654,6 @@ The `samples/` directory includes the following.
 | `count.bas` | Using FOR/NEXT and expressions |
 | `graph.bas` | Graphics with lines and points |
 | `stick.bas` | Move a dot with the arrow keys (STICK input) |
+| `meteo.bas` | Dodge falling meteors (no collision detection) |
+| `fireworks.bas` | Fireworks display |
+| `alltest.bas` | Self-test of all statements and functions |

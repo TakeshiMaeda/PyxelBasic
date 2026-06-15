@@ -11,8 +11,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pyxelbasic.interpreter import (  # noqa: E402
-    Interpreter, tokenize, basic_str,
+    Interpreter, tokenize, basic_str, BasicError,
 )
+from pyxelbasic.errors import Err  # noqa: E402
 from pyxelbasic.keywords import (  # noqa: E402
     FRAME_BREAK, STATEMENTS, FUNCTIONS,
 )
@@ -74,6 +75,23 @@ def run_program(lines, inputs=None, max_steps=100000):
             val = io.inputs.pop(0) if io.inputs else ""
             io.print_line(val)   # like the real device, bake the confirmed input into the current line and break
             interp.provide_input(val)
+    if io._cur:
+        io.out.append(io._cur)
+    return io, interp
+
+
+def run_direct(src):
+    """Execute one typed line through the direct-mode path.
+
+    Mirrors what app.py does for a non-numbered line: run the ':'-separated
+    statements via _run_stmt_seq without a flattened program (no prepare_run).
+    """
+    io = MockIO()
+    interp = Interpreter(io)
+    interp.state = "RUN"
+    interp.jumped = False
+    interp._run_stmt_seq(tokenize(src))
+    interp.state = "EDIT"
     if io._cur:
         io.out.append(io._cur)
     return io, interp
@@ -227,6 +245,26 @@ def test_multi_statement_data_unaffected():
     check("data with colon read", io.out[0], "33")
 
 
+def test_direct_multi_statement():
+    # Multi-statement ':' lines work in direct mode, not only during RUN.
+    io, interp = run_direct('A = 1 : B = 2 : PRINT A + B')
+    check("direct colon sequence", io.out[0], "3")
+    check("direct colon vars set", (interp.get_var("A"), interp.get_var("B")), (1, 2))
+
+
+def test_direct_if_then_multi():
+    io, _ = run_direct('IF 1 = 1 THEN PRINT "YES" : PRINT "AGAIN"')
+    check("direct if-then multi", io.out[:2], ["YES", "AGAIN"])
+
+
+def test_direct_for_next_no_loop():
+    # Known limitation: FOR/NEXT cannot loop in direct mode. The loop relies on
+    # rewinding the program counter into self.code, which only exists during
+    # RUN, so the body runs exactly once.
+    io, _ = run_direct('FOR K = 1 TO 3 : PRINT K; : NEXT')
+    check("direct for/next runs once", io.out, ["1"])
+
+
 def test_string_funcs():
     io, _ = run_program([
         (10, 'LET A$ = "PYXELBASIC"'),
@@ -283,6 +321,69 @@ def test_data_read():
         (40, 'PRINT A + B; " "; C$'),
     ])
     check("data/read", io.out[0], "30 HELLO")
+
+
+def test_data_signed_values():
+    # DATA items may carry a leading +/- sign (regression: the sign used to be
+    # dropped, so DATA -5 was read as 5).
+    io, _ = run_program([
+        (10, 'READ A, B, C'),
+        (20, 'PRINT A; " "; B; " "; C'),
+        (30, 'DATA -5, +7, -0.5'),
+    ])
+    check("data signed values", io.out[0], "-5 7 -0.5")
+
+
+def test_data_unquoted_is_error():
+    # Unquoted text in DATA is rejected (raised while pre-collecting at RUN),
+    # instead of being silently skipped and later surfacing as "Out of DATA".
+    interp = Interpreter(MockIO())
+    interp.store_line(10, 'READ A$')
+    interp.store_line(20, 'DATA HELLO')
+    code = None
+    try:
+        interp.prepare_run()
+    except BasicError as e:
+        code = int(e.code)
+    check("unquoted DATA raises 403", code, int(Err.INVALID_DATA))
+
+
+def test_read_into_array():
+    # READ must accept array-element targets (regression: A(i) used to assign a
+    # scalar A and then stop at the '(').
+    io, _ = run_program([
+        (10, 'DIM A(3)'),
+        (20, 'DIM M(2, 2)'),
+        (30, 'READ A(0), A(1), A(2)'),
+        (40, 'READ S, M(1, 1)'),
+        (50, 'PRINT A(0); A(1); A(2); " "; S; M(1, 1)'),
+        (60, 'DATA 11, 22, 33, 7, 99'),
+    ])
+    check("read into array", io.out[0], "112233 799")
+
+
+def test_restore_line():
+    # RESTORE <line> seeks the data pointer to that line's DATA.
+    io, _ = run_program([
+        (10, 'DATA 1, 2'),
+        (20, 'DATA 30, 40'),
+        (30, 'READ A'),
+        (40, 'RESTORE 20'),
+        (50, 'READ B, C'),
+        (60, 'PRINT A; " "; B; " "; C'),
+    ])
+    check("restore to line", io.out[0], "1 30 40")
+
+
+def test_restore_line_not_data():
+    # RESTORE to a line that has no DATA is an error.
+    io, _ = run_program([
+        (10, 'PRINT "X"'),
+        (20, 'DATA 5'),
+        (30, 'RESTORE 10'),
+    ])
+    check("restore non-data line errors",
+          any(("ERROR %d" % int(Err.RESTORE_NO_DATA)) in s for s in io.out), True)
 
 
 def test_input():
@@ -531,8 +632,13 @@ def main():
         test_multi_statement_for_next, test_multi_statement_gosub_continue,
         test_if_then_multi_and_false_skips_rest,
         test_multi_statement_data_unaffected,
+        test_direct_multi_statement, test_direct_if_then_multi,
+        test_direct_for_next_no_loop,
         test_string_funcs,
         test_array, test_array_2d, test_gosub, test_data_read,
+        test_data_signed_values, test_data_unquoted_is_error,
+        test_read_into_array,
+        test_restore_line, test_restore_line_not_data,
         test_input, test_logical, test_graphics, test_vsync,
         test_frame_break_flags, test_vsync_config_off_on,
         test_vsync_bad_word, test_vsync_list, test_vsync_reset,

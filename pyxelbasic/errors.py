@@ -53,6 +53,8 @@ class Err(IntEnum):
     # --- 4xx: array / data ---
     SUBSCRIPT_OUT_OF_RANGE = 401
     OUT_OF_DATA = 402
+    INVALID_DATA = 403
+    RESTORE_NO_DATA = 404
 
     # --- 5xx: file / command ---
     SAVE_REQUIRES_NAME = 501
@@ -97,6 +99,8 @@ MESSAGES = {
     # 4xx: array / data
     Err.SUBSCRIPT_OUT_OF_RANGE: "Subscript out of range: %s",
     Err.OUT_OF_DATA: "Out of DATA",
+    Err.INVALID_DATA: "Invalid DATA value: %s",
+    Err.RESTORE_NO_DATA: "No DATA at line %d",
 
     # 5xx: file / command
     Err.SAVE_REQUIRES_NAME: "SAVE requires a file name",
