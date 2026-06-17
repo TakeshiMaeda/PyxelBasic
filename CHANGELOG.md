@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0
+- Major change: the BASIC VM now runs on a separate thread from Pyxel's render/input loop
+- Split the interpreter, editor, and text screen into Pyxel-independent modules
+- `VSYNC` is now a no-op kept for backward compatibility; only `VSYNC LIST` prints `FRAME BREAK: (none)`
+- Added the execution-pacing startup options `--vm-cycle-steps` / `--vm-cycle-ms` / `--debug-throttle`, and `--gfx-queue-size`
+- Changed `INKEY$` to a type-ahead model (returns buffered characters one at a time)
+
 ## 0.0.6
 - Added `ELSE` support to `IF ... THEN`
 - Added one-line multiple statements separated by `:`

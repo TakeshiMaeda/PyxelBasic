@@ -1,74 +1,102 @@
 # -*- coding: utf-8 -*-
-"""PyxelBasic application body.
+"""PyxelBasic terminal front end (Pyxel main thread).
 
-Switches between edit mode, run mode and input-wait mode while driving the
-interpreter from Pyxel's main loop (update/draw).
+A thin terminal: it captures Pyxel input into an event ring, drains the graphics
+command queue onto the graphics surface, and renders the text snapshot the
+session publishes. All BASIC work (edit, run, input, meta-commands) happens on
+the Session thread (session.py); this file holds the only Pyxel input/render
+calls and the Pyxel key -> abstract key id mapping.
 """
 
 import os
+import threading
 import time
 
 import pyxel
 
-from .version import __version__
-from .console import Console, CHAR_W, CHAR_H
-from .errors import BasicError, Err
-from .interpreter import Interpreter, tokenize, basic_str
+from .console import PyxelRenderer, PyxelGraphicsSurface, CHAR_W, CHAR_H
+from .runtime import (
+    InputRing, CommandQueue, GFX_QUEUE_CAPACITY,
+    EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
+)
+from .session import Session, CYCLE_STEPS, CYCLE_PERIOD
+from .keywords import (
+    KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_HOME, KEY_END,
+    KEY_INSERT, KEY_DELETE, KEY_BACKSPACE, KEY_RETURN,
+    KEY_BTN0, KEY_BTN1, KEY_BTN2, KEY_BTN3,
+)
 
-# Number of statements to run per frame (higher is faster but less responsive)
-STEPS_PER_FRAME = 800
-
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
+# Editor auto-repeat timing for held keys (frames before / between repeats).
+REPEAT_HOLD = 20
+REPEAT_PERIOD = 2
 
 
 class App:
-    def __init__(self, width=256, height=256, autoload=None,
-                 workdir=None, autorun=False, show_fps=False):
-        # Directory used by SAVE / LOAD. Fixed at startup; there is no command to
-        # change it from inside the interpreter. Defaults to the bundled samples.
-        self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
-
+    def __init__(self, width=256, height=256, autoload=None, workdir=None,
+                 autorun=False, show_fps=False, gfx_queue_size=None,
+                 cycle_steps=None, cycle_period=None, debug_throttle=False):
         # Disable Pyxel's built-in ESC-to-quit; we confirm with a dialog instead.
-        pyxel.init(width, height, title="PyxelBasic", fps=60, quit_key=pyxel.KEY_NONE)
+        pyxel.init(width, height, title="PyxelBasic", fps=60,
+                   quit_key=pyxel.KEY_NONE)
         cols = width // CHAR_W
         rows = height // CHAR_H
-        self.console = Console(cols, rows)
-        self.interp = Interpreter(self.console)
 
-        self.mode = "EDIT"          # EDIT / RUN / INPUT
-        self.input_origin = 0       # cursor offset where INPUT typing starts
-        self.confirm_quit = False   # ESC shows a quit confirmation dialog
-        # FPS in the title bar (enabled with --showfps): measure the real frame rate.
+        # Cross-thread channels: input events (main -> session), graphics
+        # commands (session -> main).
+        self.input_ring = InputRing()
+        gcap = gfx_queue_size if gfx_queue_size is not None else GFX_QUEUE_CAPACITY
+        self.gfx_queue = CommandQueue(gcap)
+        self.gfx_surface = PyxelGraphicsSurface(cols * CHAR_W, rows * CHAR_H)
+        self.renderer = PyxelRenderer(cols, rows, self.gfx_surface)
+
+        self.session = Session(
+            cols, rows, self.gfx_queue, self.input_ring,
+            workdir=workdir, autoload=autoload, autorun=autorun,
+            cycle_steps=cycle_steps if cycle_steps is not None else CYCLE_STEPS,
+            cycle_period=cycle_period if cycle_period is not None else CYCLE_PERIOD,
+            debug_throttle=debug_throttle)
+
+        self.confirm_quit = False
         self.show_fps = show_fps
         self._fps_n = 0
         self._fps_t = time.perf_counter()
 
-        self._banner()
-        loaded = self._load_file(autoload) if autoload else False
-        if autorun and loaded:
-            try:
-                self.interp.prepare_run()
-                self.mode = "RUN"
-            except BasicError as e:
-                # e.g. an invalid DATA value detected while pre-collecting.
-                self.console.print_line("?ERROR %d: %s" % (int(e.code), e))
+        # Pyxel key -> (abstract key id, auto-repeat). Built here (Pyxel only).
+        self.key_events = [
+            (pyxel.KEY_LEFT, KEY_LEFT, True),
+            (pyxel.KEY_RIGHT, KEY_RIGHT, True),
+            (pyxel.KEY_UP, KEY_UP, True),
+            (pyxel.KEY_DOWN, KEY_DOWN, True),
+            (pyxel.KEY_HOME, KEY_HOME, False),
+            (pyxel.KEY_END, KEY_END, False),
+            (pyxel.KEY_INSERT, KEY_INSERT, False),
+            (pyxel.KEY_DELETE, KEY_DELETE, True),
+            (pyxel.KEY_BACKSPACE, KEY_BACKSPACE, True),
+            (pyxel.KEY_RETURN, KEY_RETURN, False),
+            (pyxel.KEY_Z, KEY_BTN0, False),
+            (pyxel.KEY_X, KEY_BTN1, False),
+            (pyxel.KEY_C, KEY_BTN2, False),
+            (pyxel.KEY_SPACE, KEY_BTN3, False),
+        ]
 
+        self.session_thread = threading.Thread(target=self.session.run,
+                                                daemon=True)
+        self.session_thread.start()
+
+    def run(self):
+        """Enter the Pyxel main loop (blocks until the window closes)."""
         pyxel.run(self.update, self.draw)
-
-    # --- Display helpers ---
-    def _banner(self):
-        self.console.print_line("PyxelBasic prototype v%s" % __version__)
-        self.console.print_line("(c) 2025-2026 Takeshi Maeda (SPSoft)")
-        self.console.print_line("")
+        # Window closed: stop the session and release any blocked put().
+        self.session.request_stop()
+        self.gfx_queue.stop()
 
     # --- Main loop ---
     def update(self):
         if self.show_fps:
             self._update_fps()
-        # Keep the most recent typed character for INKEY$
-        self.console.key_char = pyxel.input_text if hasattr(pyxel, "input_text") else ""
+        # Apply queued graphics every frame (also frees a back-pressured VM).
+        self.gfx_queue.drain(self.gfx_surface)
 
-        # ESC opens a quit-confirmation dialog; while it is up, only Y/N/ESC act.
         if self.confirm_quit:
             if pyxel.btnp(pyxel.KEY_Y):
                 pyxel.quit()
@@ -78,14 +106,27 @@ class App:
         if pyxel.btnp(pyxel.KEY_ESCAPE):
             self.confirm_quit = True
             return
+        # Ctrl+C breaks a running program (handled out of band by the session).
+        if pyxel.btn(pyxel.KEY_CTRL) and pyxel.btnp(pyxel.KEY_C):
+            self.session.request_break()
 
-        if self.mode == "RUN":
-            self._update_run()
-        else:
-            self._update_edit()
+        self._capture_input()
+
+    def _capture_input(self):
+        # Typed text -> char events.
+        text = pyxel.input_text if hasattr(pyxel, "input_text") else ""
+        for ch in text:
+            self.input_ring.push((EV_CHAR, ch))
+        # Key edges -> down/up; held auto-repeat keys also emit repeat ticks.
+        for pkey, kid, repeat in self.key_events:
+            if pyxel.btnp(pkey):
+                self.input_ring.push((EV_DOWN, kid))
+            elif repeat and pyxel.btnp(pkey, REPEAT_HOLD, REPEAT_PERIOD):
+                self.input_ring.push((EV_REPEAT, kid))
+            if pyxel.btnr(pkey):
+                self.input_ring.push((EV_UP, kid))
 
     def _update_fps(self):
-        # Count frames and refresh the title bar with the real frame rate ~2x/sec.
         self._fps_n += 1
         now = time.perf_counter()
         dt = now - self._fps_t
@@ -94,194 +135,13 @@ class App:
             self._fps_n = 0
             self._fps_t = now
 
-    def _break_pressed(self):
-        # Ctrl+C interrupts a running program (classic BASIC break).
-        return pyxel.btn(pyxel.KEY_CTRL) and pyxel.btnp(pyxel.KEY_C)
-
-    def _break_run(self):
-        self.console.print_line("")
-        self.console.print_line("BREAK in line %d" % self.interp.cur_line)
-        self.interp.state = "EDIT"
-        self.mode = "EDIT"
-
-    def _update_run(self):
-        if self._break_pressed():
-            self._break_run()
-            return
-        for _ in range(STEPS_PER_FRAME):
-            self.interp.step()
-            st = self.interp.state
-            if st == "INPUT":
-                self.mode = "INPUT"
-                # Remember where typed input begins so the prompt is excluded.
-                self.input_origin = self.console.caret_index()
-                return
-            if st in ("END", "EDIT"):
-                if st == "END":
-                    self.console.print_line("")
-                    self.console.print_line("OK")
-                self.mode = "EDIT"
-                return
-            # VSYNC: stop running this frame and continue on the next one
-            if self.interp.yield_frame:
-                self.interp.yield_frame = False
-                return
-
-    # --- Full-screen editor (EDIT / INPUT) ---
-    def _update_edit(self):
-        # Ctrl+C while waiting for INPUT also breaks back to edit mode.
-        if self.mode == "INPUT" and self._break_pressed():
-            self._break_run()
-            return
-        c = self.console
-        for ch in (pyxel.input_text if hasattr(pyxel, "input_text") else ""):
-            if 32 <= ord(ch) < 127:
-                c.type_char(ch)
-        if pyxel.btnp(pyxel.KEY_LEFT, 20, 2):
-            c.move_left()
-        if pyxel.btnp(pyxel.KEY_RIGHT, 20, 2):
-            c.move_right()
-        if pyxel.btnp(pyxel.KEY_UP, 20, 2):
-            c.move_up()
-        if pyxel.btnp(pyxel.KEY_DOWN, 20, 2):
-            c.move_down()
-        if pyxel.btnp(pyxel.KEY_HOME):
-            c.home()
-        if pyxel.btnp(pyxel.KEY_END):
-            c.end()
-        if pyxel.btnp(pyxel.KEY_INSERT):
-            c.toggle_insert()
-        if pyxel.btnp(pyxel.KEY_DELETE, 20, 2):
-            c.delete_at()
-        if pyxel.btnp(pyxel.KEY_BACKSPACE, 20, 2):
-            c.backspace()
-        if pyxel.btnp(pyxel.KEY_RETURN):
-            self._enter()
-
-    def _enter(self):
-        c = self.console
-        text = c.get_logical_text()[0]
-        if self.mode == "INPUT":
-            value = text[self.input_origin:] if self.input_origin <= len(text) else ""
-            c.cursor_to_next_logical()
-            self.interp.provide_input(value)
-            self.mode = "RUN"
-        else:
-            c.cursor_to_next_logical()
-            self._submit_line(text)
-
-    # --- Line submission (edit mode) ---
-    def _submit_line(self, text):
-        s = text.strip()
-        if s == "":
-            return
-        # A leading digit means a numbered program line
-        if s[0].isdigit():
-            num, rest = self._split_lineno(s)
-            self.interp.store_line(num, rest)
-            return
-        # Otherwise treat it as a direct command (output flows from the cursor)
-        try:
-            self._direct_command(s)
-        except BasicError as e:
-            self.console.print_line("?ERROR %d: %s" % (int(e.code), e))
-
-    def _split_lineno(self, s):
-        i = 0
-        while i < len(s) and s[i].isdigit():
-            i += 1
-        num = int(s[:i])
-        rest = s[i:].lstrip()
-        return num, rest
-
-    def _direct_command(self, s):
-        toks = tokenize(s)
-        if not toks:
-            return
-        kind, val = toks[0]
-        if (kind, val) == ("KW", "RUN"):
-            self.interp.prepare_run()
-            self.mode = "RUN"
-        elif (kind, val) == ("KW", "LIST"):
-            self._cmd_list(toks)
-        elif (kind, val) == ("KW", "NEW"):
-            self.interp.new_program()
-        elif (kind, val) == ("KW", "RENUM"):
-            self._cmd_renum(toks)
-        elif (kind, val) == ("KW", "SAVE"):
-            self._cmd_save(toks)
-        elif (kind, val) == ("KW", "LOAD"):
-            self._cmd_load(toks)
-        else:
-            # Execute PRINT, assignments, etc. on the spot (direct execution).
-            # _run_stmt_seq allows several ':'-separated statements on one line.
-            self.interp.state = "RUN"
-            self.interp.jumped = False
-            self.interp._run_stmt_seq(toks)
-            self.interp.state = "EDIT"
-
-    def _cmd_list(self, toks):
-        start = end = None
-        nums = [v for (k, v) in toks[1:] if k == "NUM"]
-        if len(nums) == 1:
-            start = end = int(nums[0])
-        elif len(nums) >= 2:
-            start, end = int(nums[0]), int(nums[1])
-        for ln, src in self.interp.list_lines(start, end):
-            self.console.print_line("%d %s" % (ln, src))
-
-    def _cmd_renum(self, toks):
-        nums = [v for (k, v) in toks[1:] if k == "NUM"]
-        start = int(nums[0]) if len(nums) >= 1 else 10
-        step = int(nums[1]) if len(nums) >= 2 else 10
-        self.interp.renum(start, step)
-
-    def _cmd_save(self, toks):
-        name = next((v for (k, v) in toks if k == "STR"), None)
-        if not name:
-            raise BasicError(Err.SAVE_REQUIRES_NAME)
-        path = self._resolve_path(name)
-        with open(path, "w", encoding="utf-8") as f:
-            for ln, src in self.interp.list_lines():
-                f.write("%d %s\n" % (ln, src))
-        self.console.print_line('SAVED "%s"' % name)
-
-    def _cmd_load(self, toks):
-        name = next((v for (k, v) in toks if k == "STR"), None)
-        if not name:
-            raise BasicError(Err.LOAD_REQUIRES_NAME)
-        self._load_file(name)
-
-    def _load_file(self, name):
-        path = self._resolve_path(name)
-        if not os.path.exists(path):
-            self.console.print_line('?FILE NOT FOUND "%s"' % name)
-            return False
-        self.interp.new_program()
-        with open(path, "r", encoding="utf-8") as f:
-            for raw in f:
-                line = raw.rstrip("\n")
-                s = line.strip()
-                if s and s[0].isdigit():
-                    num, rest = self._split_lineno(s)
-                    self.interp.store_line(num, rest)
-        self.console.print_line('LOADED "%s"' % name)
-        return True
-
-    def _resolve_path(self, name):
-        if not name.lower().endswith(".bas"):
-            name += ".bas"
-        os.makedirs(self.workdir, exist_ok=True)
-        return os.path.join(self.workdir, name)
-
     # --- Drawing ---
     def draw(self):
-        self.console.draw()
-        # The edited text lives in the console buffer itself; just blink a cursor
-        # (shape reflects insert vs overtype mode).
-        if (self.mode in ("EDIT", "INPUT") and not self.confirm_quit
-                and pyxel.frame_count % 30 < 15):
-            self.console.draw_cursor(True)
+        snap = self.session.screen.get_published()
+        cursor_visible = (self.session.mode in ("EDIT", "INPUT")
+                          and not self.confirm_quit
+                          and pyxel.frame_count % 30 < 15)
+        self.renderer.render(snap, cursor_visible)
         if self.confirm_quit:
             self._draw_quit_dialog()
 

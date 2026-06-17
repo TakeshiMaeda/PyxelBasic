@@ -14,9 +14,16 @@ from pyxelbasic.interpreter import (  # noqa: E402
     Interpreter, tokenize, basic_str, BasicError,
 )
 from pyxelbasic.errors import Err  # noqa: E402
-from pyxelbasic.keywords import (  # noqa: E402
-    FRAME_BREAK, STATEMENTS, FUNCTIONS,
+from pyxelbasic.keywords import STATEMENTS, FUNCTIONS  # noqa: E402
+from pyxelbasic.runtime import (  # noqa: E402
+    InputState, CommandQueue,
+    InputRing, KeyState, EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
+from pyxelbasic.keywords import (  # noqa: E402
+    KEY_UP, KEY_LEFT, KEY_BTN0, KEY_BTN1,
+)
+from pyxelbasic.textscreen import TextScreen  # noqa: E402
+from pyxelbasic.editor import Editor  # noqa: E402
 
 
 class MockIO:
@@ -414,98 +421,21 @@ def test_graphics():
     check("line cmd", io.gfx[1], ("line", 0, 0, 100, 100, 11))
 
 
-def test_vsync():
-    # Verify that VSYNC breaks frames (tested alone since PRINT also breaks)
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'FOR I = 1 TO 3')
-    interp.store_line(20, 'VSYNC')
-    interp.store_line(30, 'NEXT I')
-    interp.prepare_run()
-    frames = 0
-    steps = 0
-    while interp.state == "RUN" and steps < 10000:
-        interp.step()
-        steps += 1
-        if interp.yield_frame:
-            interp.yield_frame = False
-            frames += 1
-    check("vsync frame count", frames, 3)
-    check("vsync loop done", interp.get_var("I"), 4)
-
-
-def test_frame_break_flags():
-    # Verify the per-statement frame-break flag decision
-    def first_step_yield(src):
-        io = MockIO()
-        interp = Interpreter(io)
-        interp.store_line(10, src)
-        interp.store_line(20, 'END')
-        interp.prepare_run()
-        interp.step()   # run line 10
-        return interp.yield_frame
-
-    check("PRINT breaks", first_step_yield('PRINT "A"'), True)
-    check("PSET breaks", first_step_yield('PSET (1,1), 7'), True)
-    check("LINE breaks", first_step_yield('LINE (0,0)-(1,1), 7'), True)
-    check("STICK breaks", first_step_yield('A = STICK(0)'), True)
-    check("BUTTON breaks", first_step_yield('A = BUTTON(0)'), True)
-    check("LET no break", first_step_yield('LET A = 1'), False)
-    check("GOTO no break", first_step_yield('GOTO 20'), False)
-
-
-def test_vsync_config_off_on():
-    # VSYNC <word> OFF / ON can change the break targets at runtime
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'VSYNC PSET OFF')
-    interp.store_line(20, 'PSET (1,1), 7')
-    interp.store_line(30, 'VSYNC PSET ON')
-    interp.store_line(40, 'PSET (2,2), 7')
-    interp.prepare_run()
-    interp.step()   # VSYNC PSET OFF
-    check("config cmd no yield", interp.yield_frame, False)
-    check("PSET removed", "PSET" in interp.frame_break, False)
-    interp.step()   # PSET (no break since it is OFF)
-    check("PSET no break after OFF", interp.yield_frame, False)
-    interp.step()   # VSYNC PSET ON
-    check("PSET re-added", "PSET" in interp.frame_break, True)
-    interp.step()   # PSET (breaks since it is ON)
-    check("PSET break after ON", interp.yield_frame, True)
-
-
-def test_vsync_bad_word():
-    # Specifying a nonexistent reserved word is an error (it becomes a VAR token)
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'VSYNC FOO ON')
-    interp.prepare_run()
-    interp.step()
-    check("bad word -> error", any("ERROR" in s for s in io.out), True)
-
-
-def test_vsync_list():
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'VSYNC LIST')
-    interp.prepare_run()
-    interp.step()
-    check("vsync list output", any("FRAME BREAK" in s for s in io.out), True)
-
-
-def test_vsync_reset():
-    # VSYNC RESET restores the initial state (can run mid-program)
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'VSYNC PRINT OFF')
-    interp.store_line(20, 'VSYNC LINE OFF')
-    interp.store_line(30, 'VSYNC RESET')
-    interp.prepare_run()
-    interp.step()   # PRINT OFF
-    interp.step()   # LINE OFF
-    check("changed before reset", interp.frame_break == set(FRAME_BREAK), False)
-    interp.step()   # RESET
-    check("restored after reset", interp.frame_break == set(FRAME_BREAK), True)
+def test_vsync_noop():
+    # VSYNC is a no-op now (frame pacing is the VM throttle). Only VSYNC LIST
+    # still prints the historical frame-break list; every other form runs
+    # without error and does nothing.
+    io, _ = run_program([
+        (10, 'VSYNC'),
+        (20, 'VSYNC LINE OFF'),
+        (30, 'VSYNC FOO ON'),
+        (40, 'VSYNC RESET'),
+        (50, 'PRINT "DONE"'),
+    ])
+    check("vsync no-op runs clean", io.out[-1], "DONE")
+    check("vsync no-op raises nothing", any("ERROR" in s for s in io.out), False)
+    io2, _ = run_program([(10, 'VSYNC LIST')])
+    check("vsync list still prints", any("FRAME BREAK" in s for s in io2.out), True)
 
 
 def test_mod_fraction():
@@ -515,32 +445,6 @@ def test_mod_fraction():
     check("mod by fraction -> error", any("ERROR" in s for s in io.out), True)
     io, _ = run_program([(10, 'PRINT 7.9 MOD 3.9')])
     check("mod integerizes operands", io.out[0], "1")
-
-
-def test_vsync_clear():
-    # VSYNC CLEAR removes every automatic break target; an explicit VSYNC still works.
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.store_line(10, 'VSYNC CLEAR')
-    interp.prepare_run()
-    interp.step()   # CLEAR
-    check("cleared frame_break empty", interp.frame_break, set())
-    # An explicit VSYNC still requests a frame break even after CLEAR.
-    interp.yield_frame = False
-    interp.store_line(20, 'VSYNC')
-    interp.prepare_run()
-    interp.step()   # CLEAR (re-run from line 10)
-    interp.step()   # VSYNC (explicit)
-    check("explicit vsync still breaks", interp.yield_frame, True)
-
-
-def test_new_resets_framebreak():
-    # NEW also restores the break config to its initial state
-    io = MockIO()
-    interp = Interpreter(io)
-    interp.frame_break.discard("PRINT")
-    interp.new_program()
-    check("new restores framebreak", interp.frame_break == set(FRAME_BREAK), True)
 
 
 def test_renum():
@@ -580,6 +484,181 @@ def test_store_uppercases_code():
     check("upper code, keep string", prog.get(10), 'PRINT LEFT$("AbC", 2)')
     check("upper REM, keep comment", prog.get(20), 'REM Keep This Case')
     check("upper plain", prog.get(30), 'FOR I=1 TO 5')
+
+
+class _Recorder:
+    """Records any method call as (name, *args) for queue/IO tests."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, name):
+        def f(*args):
+            self.calls.append((name,) + args)
+        return f
+
+
+def test_runtime_input_state():
+    inp = InputState()
+    check("input default", (inp.get_key_char(), inp.get_stick(), inp.get_button(0)),
+          ("", 0, 0))
+    inp.update("A", 5, [1, 0, 1, 0])
+    check("input updated", (inp.get_key_char(), inp.get_stick()), ("A", 5))
+    check("input button on/off", (inp.get_button(0), inp.get_button(1)), (1, 0))
+    check("input button oob", inp.get_button(9), 0)
+
+
+def test_runtime_command_queue_order():
+    q = CommandQueue(capacity=4)
+    q.put(("cls", ()))
+    q.put(("print_text", ("HI",)))
+    q.put(("pset", (1, 2, 7)))
+    rec = _Recorder()
+    q.drain(rec)
+    check("queue applies in order", rec.calls,
+          [("cls",), ("print_text", "HI"), ("pset", 1, 2, 7)])
+    q.wait_empty()   # already empty -> returns immediately
+    check("queue empty after drain", len(q._dq), 0)
+
+
+def test_runtime_command_queue_backpressure():
+    # A small queue must throttle a fast producer without losing/reordering.
+    import threading
+    import time
+    q = CommandQueue(capacity=2)
+    rec = _Recorder()
+
+    def producer():
+        for i in range(6):
+            q.put(("print_text", (str(i),)))
+
+    t = threading.Thread(target=producer)
+    t.start()
+    deadline = time.time() + 3
+    while (t.is_alive() or len(rec.calls) < 6) and time.time() < deadline:
+        q.drain(rec)
+        time.sleep(0.001)
+    t.join(timeout=1)
+    q.drain(rec)
+    check("backpressure delivers all in order",
+          [c[1] for c in rec.calls], ["0", "1", "2", "3", "4", "5"])
+
+
+def test_input_ring():
+    ring = InputRing(capacity=3)
+    check("ring push ok", ring.push((EV_CHAR, "A")), True)
+    ring.push((EV_DOWN, KEY_UP))
+    ring.push((EV_CHAR, "B"))
+    check("ring full drops newest", ring.push((EV_CHAR, "C")), False)
+    items = ring.drain()
+    check("ring drains in order", items,
+          [(EV_CHAR, "A"), (EV_DOWN, KEY_UP), (EV_CHAR, "B")])
+    check("ring empty after drain", ring.drain(), [])
+
+
+def test_key_state_stick_button():
+    ks = KeyState()
+    ks.apply_all([(EV_DOWN, KEY_UP), (EV_DOWN, KEY_LEFT), (EV_DOWN, KEY_BTN0)])
+    check("stick up+left bits", ks.stick(0), 1 | 4)
+    check("button0 down", ks.button(0), 1)
+    check("button1 up", ks.button(1), 0)
+    # releasing clears the held state
+    ks.apply((EV_UP, KEY_LEFT))
+    check("stick after release", ks.stick(0), 1)
+    # a repeat event does not change the held set
+    ks.apply((EV_REPEAT, KEY_UP))
+    check("repeat no level change", ks.stick(0), 1)
+
+
+def test_key_state_inkey_typeahead():
+    ks = KeyState()
+    ks.apply_all([(EV_CHAR, "H"), (EV_CHAR, "I")])
+    check("inkey pop 1", ks.inkey(), "H")
+    check("inkey pop 2", ks.inkey(), "I")
+    check("inkey empty", ks.inkey(), "")
+
+
+def _screen_rows(ts):
+    return ["".join(ts.chars[y]).rstrip() for y in range(ts.rows)]
+
+
+def test_textscreen_print_wrap():
+    ts = TextScreen(cols=8, rows=4)
+    ts.print_line("HELLO")
+    check("ts print line", _screen_rows(ts)[0], "HELLO")
+    ts2 = TextScreen(cols=8, rows=4)
+    ts2.print_text("ABCDEFGHIJ")   # 10 chars wrap on an 8-wide screen
+    check("ts wrap row0", "".join(ts2.chars[0]), "ABCDEFGH")
+    check("ts wrap row1", "".join(ts2.chars[1]).rstrip(), "IJ")
+    check("ts wrap continuation", ts2.cont[1], True)
+
+
+def test_textscreen_scroll_length_invariant():
+    ts = TextScreen(cols=8, rows=3)
+    for i in range(5):
+        ts.print_line("L%d" % i)
+    check("ts scroll length invariant",
+          (len(ts.chars), len(ts.cols_color), len(ts.cont)), (3, 3, 3))
+    check("ts scroll keeps recent", "L4" in _screen_rows(ts), True)
+
+
+def test_textscreen_logical_text():
+    ts = TextScreen(cols=8, rows=4)
+    ts.print_text("ABCDEFGHIJ")   # one wrapped logical line across rows 0-1
+    text, r, s = ts.get_logical_text(1)
+    check("ts logical text joins wrap", text, "ABCDEFGHIJ")
+    check("ts logical span", (r, s), (0, 1))
+
+
+def test_textscreen_snapshot():
+    ts = TextScreen(cols=8, rows=4)
+    ts.print_text("AB")
+    snap = ts.snapshot()
+    v = snap.version
+    check("snap content", snap.chars[0][0], "A")
+    check("snap cursor", (snap.cx, snap.cy), (2, 0))
+    ts.print_text("C")
+    check("snap is immutable", snap.chars[0][2], " ")
+    check("snap version bumps on change", ts.snapshot().version > v, True)
+
+
+def test_editor_type_delete():
+    ts = TextScreen(cols=16, rows=4)
+    ed = Editor(ts)
+    for ch in "HELLO":
+        ed.type_char(ch)
+    check("editor typed", ts.get_logical_text(0)[0], "HELLO")
+    ed.move_left()
+    ed.move_left()                 # caret before the 2nd 'L' (index 3)
+    ed.type_char("X")
+    check("editor insert mid", ts.get_logical_text(0)[0], "HELXLO")
+    ed.backspace()
+    check("editor backspace", ts.get_logical_text(0)[0], "HELLO")
+    ed.delete_at()
+    check("editor delete_at", ts.get_logical_text(0)[0], "HELO")
+
+
+def test_editor_overtype():
+    ts = TextScreen(cols=16, rows=4)
+    ed = Editor(ts)
+    for ch in "ABCD":
+        ed.type_char(ch)
+    ed.home()
+    ed.toggle_insert()             # switch to overtype
+    ed.type_char("Z")
+    check("editor overtype", ts.get_logical_text(0)[0], "ZBCD")
+
+
+def test_editor_reflow_wrap():
+    ts = TextScreen(cols=4, rows=6)
+    ed = Editor(ts)
+    for ch in "ABCDEF":            # wraps to two rows as one logical line
+        ed.type_char(ch)
+    check("editor wrapped text", ts.get_logical_text(0)[0], "ABCDEF")
+    check("editor wrapped continuation", ts.cont[1], True)
+    ed.home()
+    ed.type_char("X")
+    check("editor reflow on insert", ts.get_logical_text(0)[0], "XABCDEF")
 
 
 def test_dispatch_registration():
@@ -639,12 +718,17 @@ def main():
         test_data_signed_values, test_data_unquoted_is_error,
         test_read_into_array,
         test_restore_line, test_restore_line_not_data,
-        test_input, test_logical, test_graphics, test_vsync,
-        test_frame_break_flags, test_vsync_config_off_on,
-        test_vsync_bad_word, test_vsync_list, test_vsync_reset,
-        test_vsync_clear, test_mod_fraction,
-        test_new_resets_framebreak, test_renum, test_renum_keeps_rem,
+        test_input, test_logical, test_graphics,
+        test_vsync_noop, test_mod_fraction,
+        test_renum, test_renum_keeps_rem,
         test_store_uppercases_code,
+        test_runtime_input_state, test_runtime_command_queue_order,
+        test_runtime_command_queue_backpressure,
+        test_input_ring, test_key_state_stick_button,
+        test_key_state_inkey_typeahead,
+        test_textscreen_print_wrap, test_textscreen_scroll_length_invariant,
+        test_textscreen_logical_text, test_textscreen_snapshot,
+        test_editor_type_delete, test_editor_overtype, test_editor_reflow_wrap,
         test_dispatch_registration, test_alltest_sample,
     ]:
         print(fn.__name__)

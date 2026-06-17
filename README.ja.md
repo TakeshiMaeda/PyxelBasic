@@ -5,7 +5,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在はプロトタイプ版（v0.0.6）です。
+> 現在のバージョンはv0.1.0です。
 
 ## 特徴
 
@@ -15,7 +15,7 @@
 - 数値・文字列の変数と多次元配列
 - 文字列・数学・乱数・入力の組み込み関数
 - 点・線のグラフィック描画とテキスト画面
-- `VSYNC` による柔軟なフレーム制御（命令単位で同期点を ON/OFF できる）
+- BASIC VM を Pyxel の描画・入力ループとは別スレッドで実行
 - プログラムのファイル保存・読み込み（`SAVE` / `LOAD`）
 
 ## 必要環境
@@ -54,6 +54,9 @@ python main.py --help               ヘルプを表示して終了
   変更できない。省略時は同梱の `samples/`。
 - `--run` 読み込んだプログラムを自動実行する（`--load` が必要）。
 - `--showfps` 実フレームレートをウィンドウのタイトルバーに表示する。
+- `--gfx-queue-size N` グラフィックコマンドキューの容量（既定 1024）。
+- `--vm-cycle-steps N` / `--vm-cycle-ms MS` BASIC VM の実行ペース調整（1 サイクルあたりの命令数 / サイクルの目標周期 ms）。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
+- `--debug-throttle` 実行ペースの実測値（sleep 下限・実効レート）を起動時に標準エラーへ出力する。
 - `--version` ウィンドウを開かずにバージョンだけ表示して終了する。
 - `-h`, `--help` ヘルプを表示して終了する。
 
@@ -92,6 +95,8 @@ RUN
 
 ## 言語仕様
 
+言語仕様は Microsoft 系 BASICを参考にした独自仕様です。互換性を目的としたものではなく、PyxelBasic 独自の解釈・記法・制限があります。
+
 実装済みの命令・関数・演算子の**完全なリファレンス**は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) を参照してください。
 
 主な要素:
@@ -107,8 +112,12 @@ PyxelBasic/
 ├── main.py                起動スクリプト
 ├── pyxelbasic/
 │   ├── interpreter.py     インタプリタコア（字句解析・式評価・実行エンジン／Pyxel非依存）
-│   ├── console.py         Pyxelテキストコンソール兼グラフィック面
-│   └── app.py             編集／実行／入力モードの統合とメインループ
+│   ├── textscreen.py      テキスト画面モデル（仮想VRAM・折返し・スクロール／Pyxel非依存）
+│   ├── editor.py          フルスクリーン編集ロジック（Pyxel非依存）
+│   ├── session.py         BASIC VM セッション（別スレッドで編集／実行／入力を駆動／Pyxel非依存）
+│   ├── runtime.py         スレッド間プラミング（入力イベントリング・描画キュー／Pyxel非依存）
+│   ├── console.py         Pyxel 描画フロントエンド（テキスト／グラフィックのレンダラ）
+│   └── app.py             Pyxel 端末（入力取得・描画・メインループ）
 ├── samples/               サンプルプログラム（.bas）
 ├── tests/
 │   └── test_core.py       コアのヘッドレステスト
@@ -124,7 +133,7 @@ PyxelBasic/
 python tests/test_core.py
 ```
 
-字句解析・式評価・制御構造・配列・文字列関数・INPUT・グラフィック命令・フレーム制御・RENUM などを検証します。
+字句解析・式評価・制御構造・配列・文字列関数・INPUT・グラフィック命令・テキスト画面／エディタ・入力イベント・RENUM などを検証します。
 
 ## 未実装（今後の予定）
 

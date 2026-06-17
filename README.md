@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is a prototype (v0.0.6).
+> This is a prototype (v0.1.0).
 
 ## Features
 
@@ -15,7 +15,7 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 - Numeric and string variables, and multi-dimensional arrays
 - Built-in functions for strings, math, random numbers, and input
 - Point and line graphics plus a text screen
-- Flexible frame control with `VSYNC` (sync points can be toggled per keyword)
+- The BASIC VM runs on a separate thread from Pyxel's render/input loop
 - Save / load programs to files (`SAVE` / `LOAD`)
 
 ## Requirements
@@ -54,6 +54,12 @@ Options:
   changed from inside the interpreter. Defaults to the bundled `samples/`.
 - `--run` run the loaded program automatically (requires `--load`).
 - `--showfps` show the real frame rate in the window title bar.
+- `--gfx-queue-size N` capacity of the graphics command queue (default 1024).
+- `--vm-cycle-steps N` / `--vm-cycle-ms MS` tune the BASIC VM's execution pace
+  (statements per cycle / target cycle period in ms). See "Execution Pacing and
+  VSYNC" in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
+- `--debug-throttle` print the measured execution pace (sleep floor and effective
+  rate) to standard error at startup.
 - `--version` print the version and exit without opening a window.
 - `-h`, `--help` show the help message and exit.
 
@@ -93,6 +99,8 @@ RUN
 
 ## Language Specification
 
+The language is an original design inspired by Microsoft-style BASIC. It does not aim for compatibility; PyxelBasic has its own interpretation, notation, and limitations.
+
 For the **complete reference** of implemented statements, functions, and operators, see [docs/REFERENCE.md](docs/REFERENCE.md).
 
 Main elements:
@@ -108,8 +116,12 @@ PyxelBasic/
 ├── main.py                launcher
 ├── pyxelbasic/
 │   ├── interpreter.py     interpreter core (lexer, expression evaluator, execution engine; Pyxel-independent)
-│   ├── console.py         Pyxel text console and graphics surface
-│   └── app.py             integration of edit/run/input modes and the main loop
+│   ├── textscreen.py      text screen model (virtual VRAM, wrapping, scrolling; Pyxel-independent)
+│   ├── editor.py          full-screen editing logic (Pyxel-independent)
+│   ├── session.py         BASIC VM session (drives edit/run/input on a separate thread; Pyxel-independent)
+│   ├── runtime.py         inter-thread plumbing (input event ring, graphics queue; Pyxel-independent)
+│   ├── console.py         Pyxel render front end (text / graphics renderer)
+│   └── app.py             Pyxel terminal (input capture, rendering, main loop)
 ├── samples/               sample programs (.bas)
 ├── tests/
 │   └── test_core.py       headless tests for the core
@@ -125,7 +137,7 @@ The interpreter core does not depend on Pyxel, so it can be tested headlessly.
 python tests/test_core.py
 ```
 
-This covers lexing, expression evaluation, control structures, arrays, string functions, INPUT, graphics commands, frame control, RENUM, and more.
+This covers lexing, expression evaluation, control structures, arrays, string functions, INPUT, graphics commands, the text screen / editor, input events, RENUM, and more.
 
 ## Not Yet Implemented (planned)
 

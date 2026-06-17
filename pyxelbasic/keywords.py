@@ -78,16 +78,29 @@ SYNTAX = {"THEN", "ELSE", "TO", "STEP"}
 # Word-form operators.
 WORD_OPS = {"MOD", "AND", "OR", "NOT", "XOR"}
 
-# --- Initial frame-break configuration ---
-# When any reserved word listed here is executed (as a statement) or evaluated
-# (as a function), the current frame is cut off and resumed on the next frame.
-# This is the initial value; at runtime it can be adjusted with VSYNC <word>
-# ON|OFF (Interpreter.frame_break).
-FRAME_BREAK = {
-    "PRINT",            # screen output
-    "PSET", "LINE",     # drawing statements
-    "STICK", "BUTTON",  # input polling (functions)
-}
+# --- Abstract input key identifiers (platform-independent) ---
+# The frontend (Pyxel side) translates real device keys into these IDs and emits
+# them as input events; the VM-side input layer derives STICK/BUTTON/INKEY$ from
+# the resulting event stream. Defined here so the keys live in one place, the
+# same way reserved words do (the Pyxel key mapping itself stays in the frontend).
+KEY_UP = "UP"
+KEY_DOWN = "DOWN"
+KEY_LEFT = "LEFT"
+KEY_RIGHT = "RIGHT"
+KEY_HOME = "HOME"
+KEY_END = "END"
+KEY_INSERT = "INSERT"
+KEY_DELETE = "DELETE"
+KEY_BACKSPACE = "BACKSPACE"
+KEY_RETURN = "RETURN"
+KEY_BTN0 = "BTN0"
+KEY_BTN1 = "BTN1"
+KEY_BTN2 = "BTN2"
+KEY_BTN3 = "BTN3"
+
+# STICK direction bits (numpad style) and BUTTON order, derived from key state.
+STICK_BITS = ((KEY_UP, 1), (KEY_DOWN, 2), (KEY_LEFT, 4), (KEY_RIGHT, 8))
+BUTTON_KEYS = (KEY_BTN0, KEY_BTN1, KEY_BTN2, KEY_BTN3)
 
 # --- Derived sets (generated from the maps above; do not hand-edit) ---
 STATEMENTS = set(STATEMENT_HANDLERS)

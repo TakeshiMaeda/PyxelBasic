@@ -11,7 +11,7 @@ import random
 from .errors import BasicError, Err
 from .keywords import (
     STATEMENT_HANDLERS, FUNCTION_HANDLERS, MATH1,
-    FRAME_BREAK, KEYWORDS, WORD_OPS, FUNCTIONS,
+    KEYWORDS, WORD_OPS, FUNCTIONS,
 )
 
 
@@ -366,10 +366,6 @@ class Evaluator:
     def parse_function(self, name):
         self.advance()  # function name
 
-        # If this function is a frame-break target, break the frame on evaluation
-        if name in self.interp.frame_break:
-            self.interp.yield_frame = True
-
         spec = self.interp._func_dispatch.get(name)
         if spec is not None:
             fn, raw = spec
@@ -476,9 +472,6 @@ class Interpreter:
     def __init__(self, io):
         self.io = io                  # I/O target
         self.program = {}             # line number -> source string
-        # Frame-break targets. Kept across runs because the VSYNC command can
-        # adjust them at runtime; reset_runtime does not reinitialize this.
-        self.frame_break = set(FRAME_BREAK)
         # Resolve keyword -> handler once here, so dispatch costs no getattr per
         # step. Statement handlers are bound Interpreter methods; function handlers
         # are unbound Evaluator functions (called with the live Evaluator as self).
@@ -549,7 +542,6 @@ class Interpreter:
 
     def new_program(self):
         self.program = {}
-        self.frame_break = set(FRAME_BREAK)   # reset the break config too
         self.reset_runtime()
         self.state = "EDIT"
 
@@ -567,7 +559,6 @@ class Interpreter:
         self.pc = 0
         self.jumped = False
         self.input_targets = []
-        self.yield_frame = False    # signal from VSYNC to cut off this frame
         self.cur_line = 0           # line number of the statement last executed
 
     def prepare_run(self):
@@ -707,10 +698,6 @@ class Interpreter:
         if handler is None:
             raise BasicError(Err.UNSUPPORTED_STATEMENT, val)
         handler(toks)
-
-        # If this statement is a frame-break target, cut off the frame here
-        if val in self.frame_break:
-            self.yield_frame = True
 
     # --- Implementation of each statement ---
     def _eval_from(self, toks, start):
@@ -1024,41 +1011,18 @@ class Interpreter:
             random.seed()
 
     def _do_vsync(self, toks):
-        # VSYNC                  -> break this frame (explicit sync point)
-        # VSYNC LIST             -> show the current break targets
-        # VSYNC RESET            -> restore the break config to its initial state
-        # VSYNC CLEAR            -> remove every automatic break target (only an
-        #                           explicit VSYNC breaks a frame afterwards)
-        # VSYNC <word> ON|OFF    -> change the frame-break setting for that word
-        if len(toks) == 1:
-            self.yield_frame = True
-            return
-        sub = toks[1][1]   # second word (a reserved word name if KW, an identifier if VAR)
-        if sub == "LIST":
+        # VSYNC is a no-op: frame pacing is handled by the VM throttle now.
+        # Only "VSYNC LIST" still prints the historical frame-break word list
+        # (the original no-config output), for compatibility. Every other form
+        # (bare VSYNC, VSYNC RESET/CLEAR, VSYNC <word> ON|OFF, etc.) is accepted
+        # and ignored without error.
+        if len(toks) >= 2 and toks[1][1] == "LIST":
             self._vsync_list()
-            return
-        if sub == "RESET":
-            self.frame_break = set(FRAME_BREAK)
-            return
-        if sub == "CLEAR":
-            self.frame_break = set()
-            return
-        # Remaining form is "<word> ON|OFF". The second word must be a valid reserved word (KW token)
-        if toks[1][0] != "KW":
-            raise BasicError(Err.VSYNC_KEYWORD_REQUIRED)
-        if len(toks) < 3 or toks[2][0] != "VAR" or toks[2][1] not in ("ON", "OFF"):
-            raise BasicError(Err.VSYNC_ON_OFF_REQUIRED)
-        if toks[2][1] == "ON":
-            self.frame_break.add(sub)
-        else:
-            self.frame_break.discard(sub)
 
     def _vsync_list(self):
-        if self.frame_break:
-            words = " ".join(sorted(self.frame_break))
-        else:
-            words = "(none)"
-        self.io.print_line("FRAME BREAK: " + words)
+        # No frame-break settings exist any more (VSYNC is a no-op), so the list
+        # is always empty; kept only so "VSYNC LIST" still prints something.
+        self.io.print_line("FRAME BREAK: (none)")
 
 
 # ---------------------------------------------------------------------------

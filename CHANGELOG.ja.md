@@ -1,5 +1,12 @@
 # 変更履歴
 
+## 0.1.0
+- BASIC VM を Pyxel の描画・入力ループとは別スレッドで実行するように大幅変更
+- インタプリタ・エディタ・テキスト画面を Pyxel 非依存モジュールに分離
+- `VSYNC` を後方互換のための no-op に変更。`VSYNC LIST` のみ `FRAME BREAK: (none)` を表示
+- 実行ペース調整の起動オプション `--vm-cycle-steps` / `--vm-cycle-ms` / `--debug-throttle` を追加、`--gfx-queue-size` を追加
+- `INKEY$` をタイプアヘッド方式（入力済みの文字を 1 文字ずつ取り出し）に変更
+
 ## 0.0.6
 - `IF ... THEN` に `ELSE` 対応を追加
 - `:` 区切りによる 1 行複数文を追加
