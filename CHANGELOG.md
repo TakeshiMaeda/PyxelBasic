@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+- Added `--exec-mode {main,thread}` to switch the execution model (default main)
+- main mode: the Pyxel main loop drives the VM each frame, with VSYNC frame-break active
+- thread mode: the VM runs on a separate thread (same as 0.1.0); VSYNC is a no-op
+- Added `--steps-per-frame` to set the statements run per frame in main mode
+- Dropped "prototype" from the version label
+
 ## 0.1.0
 - Major change: the BASIC VM now runs on a separate thread from Pyxel's render/input loop
 - Split the interpreter, editor, and text screen into Pyxel-independent modules

@@ -16,7 +16,7 @@ import argparse
 
 from pyxelbasic.version import __version__
 from pyxelbasic.runtime import GFX_QUEUE_CAPACITY
-from pyxelbasic.session import CYCLE_STEPS, CYCLE_PERIOD
+from pyxelbasic.session import CYCLE_STEPS, CYCLE_PERIOD, STEPS_PER_FRAME
 
 
 def _positive_int(s):
@@ -48,12 +48,24 @@ def build_parser():
         help="directory used by SAVE/LOAD "
              "(fixed at startup; cannot be changed from inside the interpreter)")
     parser.add_argument(
+        "--exec-mode", choices=("main", "thread"), default="main",
+        help="VM execution mode: 'main' drives the VM from the Pyxel main loop "
+             "each frame with VSYNC frame-break active; 'thread' runs the VM on "
+             "a separate thread with throttle pacing and VSYNC as a no-op "
+             "(default %(default)s)")
+    parser.add_argument(
+        "--steps-per-frame", metavar="N", type=_positive_int,
+        default=STEPS_PER_FRAME,
+        help="main mode: BASIC statements run per frame (default %(default)s)")
+    parser.add_argument(
         "--gfx-queue-size", metavar="N", type=_positive_int,
         default=GFX_QUEUE_CAPACITY,
-        help="graphics-command (PSET/LINE) queue capacity (default %(default)s)")
+        help="thread mode: graphics-command (PSET/LINE) queue capacity "
+             "(default %(default)s)")
     parser.add_argument(
         "--vm-cycle-steps", metavar="N", type=_positive_int, default=CYCLE_STEPS,
-        help="BASIC statements run per throttle cycle (default %(default)s)")
+        help="thread mode: BASIC statements run per throttle cycle "
+             "(default %(default)s)")
     parser.add_argument(
         "--vm-cycle-ms", metavar="MS", type=_nonneg_float,
         default=CYCLE_PERIOD * 1000.0,
@@ -80,7 +92,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print("PyxelBasic prototype v%s" % __version__)
+        print("PyxelBasic v%s" % __version__)
         return
 
     # --load takes precedence over the positional shorthand.
@@ -94,7 +106,9 @@ def main():
         show_fps=args.showfps, gfx_queue_size=args.gfx_queue_size,
         cycle_steps=args.vm_cycle_steps,
         cycle_period=args.vm_cycle_ms / 1000.0,
-        debug_throttle=args.debug_throttle).run()
+        debug_throttle=args.debug_throttle,
+        exec_mode=args.exec_mode,
+        steps_per_frame=args.steps_per_frame).run()
 
 
 if __name__ == "__main__":

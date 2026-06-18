@@ -38,6 +38,10 @@ from .keywords import (
 CYCLE_STEPS = 400
 CYCLE_PERIOD = 0.064   # seconds; <= 0 disables the throttle (run free)
 
+# Main-driven mode: statements executed per Pyxel frame (the classic cooperative
+# pacing). Higher is faster but less responsive. Used only when exec_mode="main".
+STEPS_PER_FRAME = 800
+
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
 
 # Editor key id -> Editor method name ("enter" is line submission).
@@ -108,7 +112,7 @@ class Session:
     def __init__(self, cols, rows, gfx_queue, input_ring, workdir=None,
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
-                 debug_throttle=False):
+                 debug_throttle=False, vsync_enabled=False):
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
@@ -116,7 +120,9 @@ class Session:
         self.gfx_queue = gfx_queue
         self.input_ring = input_ring
         self.io = SessionIO(self.screen, gfx_queue, self.keys)
-        self.interp = Interpreter(self.io)
+        # vsync_enabled is True only in the main-driven execution mode, where the
+        # interpreter honours frame-break/VSYNC; the threaded mode leaves it off.
+        self.interp = Interpreter(self.io, vsync_enabled=vsync_enabled)
 
         self.mode = "EDIT"          # EDIT / RUN / INPUT
         self.input_origin = 0
@@ -217,6 +223,39 @@ class Session:
                    % (rate, rate * self.steps_per_cycle))
         sys.stderr.write("\n".join(out) + "\n")
         sys.stderr.flush()
+
+    # --- main-driven mode (driven one frame at a time by the Pyxel main loop) ---
+    def poll_input(self):
+        """Public entry: pump input once (used by the main-driven driver)."""
+        self._poll_input()
+
+    def run_frame(self, max_steps):
+        """Run up to max_steps statements for one Pyxel frame (main-driven mode).
+
+        Like _run_cycle but honours the interpreter's yield_frame flag, so a
+        VSYNC / frame-break statement or function ends the frame early and the
+        Pyxel main loop continues it on the next frame.
+        """
+        for _ in range(max_steps):
+            if self._break:
+                self._break = False
+                self._do_break()
+                return
+            if self.interp.state != "RUN":
+                break
+            self.interp.step()
+            st = self.interp.state
+            if st == "INPUT":
+                self.mode = "INPUT"
+                self.input_origin = self.screen.caret_index()
+                return
+            if st in ("END", "EDIT"):
+                self._finish_run(st)
+                return
+            # Frame-break / VSYNC: stop running this frame, resume next frame.
+            if self.interp.yield_frame:
+                self.interp.yield_frame = False
+                return
 
     # --- input dispatch ---
     def _poll_input(self):
@@ -385,6 +424,6 @@ class Session:
 
     # --- display ---
     def _banner(self):
-        self.screen.print_line("PyxelBasic prototype v%s" % __version__)
+        self.screen.print_line("PyxelBasic v%s" % __version__)
         self.screen.print_line("(c) 2025-2026 Takeshi Maeda (SPSoft)")
         self.screen.print_line("")

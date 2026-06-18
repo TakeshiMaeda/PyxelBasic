@@ -102,6 +102,18 @@ KEY_BTN3 = "BTN3"
 STICK_BITS = ((KEY_UP, 1), (KEY_DOWN, 2), (KEY_LEFT, 4), (KEY_RIGHT, 8))
 BUTTON_KEYS = (KEY_BTN0, KEY_BTN1, KEY_BTN2, KEY_BTN3)
 
+# --- Initial frame-break configuration (main-driven execution mode) ---
+# When any reserved word listed here is executed (as a statement) or evaluated
+# (as a function), the current frame is cut off and resumed on the next frame.
+# This is only used by the main-driven execution mode (VSYNC enabled); the
+# threaded mode runs with an empty frame-break set so VSYNC stays a no-op. At
+# runtime the set can be adjusted with VSYNC <word> ON|OFF (Interpreter.frame_break).
+FRAME_BREAK = {
+    "PRINT",            # screen output
+    "PSET", "LINE",     # drawing statements
+    "STICK", "BUTTON",  # input polling (functions)
+}
+
 # --- Derived sets (generated from the maps above; do not hand-edit) ---
 STATEMENTS = set(STATEMENT_HANDLERS)
 FUNCTIONS = set(FUNCTION_HANDLERS) | set(MATH1)

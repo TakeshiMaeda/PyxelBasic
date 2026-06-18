@@ -16,10 +16,10 @@ import pyxel
 
 from .console import PyxelRenderer, PyxelGraphicsSurface, CHAR_W, CHAR_H
 from .runtime import (
-    InputRing, CommandQueue, GFX_QUEUE_CAPACITY,
+    InputRing, CommandQueue, DirectGraphics, GFX_QUEUE_CAPACITY,
     EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
-from .session import Session, CYCLE_STEPS, CYCLE_PERIOD
+from .session import Session, CYCLE_STEPS, CYCLE_PERIOD, STEPS_PER_FRAME
 from .keywords import (
     KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_HOME, KEY_END,
     KEY_INSERT, KEY_DELETE, KEY_BACKSPACE, KEY_RETURN,
@@ -34,27 +34,37 @@ REPEAT_PERIOD = 2
 class App:
     def __init__(self, width=256, height=256, autoload=None, workdir=None,
                  autorun=False, show_fps=False, gfx_queue_size=None,
-                 cycle_steps=None, cycle_period=None, debug_throttle=False):
+                 cycle_steps=None, cycle_period=None, debug_throttle=False,
+                 exec_mode="main", steps_per_frame=None):
         # Disable Pyxel's built-in ESC-to-quit; we confirm with a dialog instead.
         pyxel.init(width, height, title="PyxelBasic", fps=60,
                    quit_key=pyxel.KEY_NONE)
         cols = width // CHAR_W
         rows = height // CHAR_H
 
-        # Cross-thread channels: input events (main -> session), graphics
-        # commands (session -> main).
+        self.exec_mode = exec_mode      # "main" (this thread drives the VM) or "thread"
+        self.steps_per_frame = (steps_per_frame if steps_per_frame is not None
+                                else STEPS_PER_FRAME)
+
         self.input_ring = InputRing()
-        gcap = gfx_queue_size if gfx_queue_size is not None else GFX_QUEUE_CAPACITY
-        self.gfx_queue = CommandQueue(gcap)
         self.gfx_surface = PyxelGraphicsSurface(cols * CHAR_W, rows * CHAR_H)
         self.renderer = PyxelRenderer(cols, rows, self.gfx_surface)
+        # Graphics target depends on the mode. Threaded: a bounded, thread-safe
+        # CommandQueue the main thread drains. Main-driven: a same-thread direct
+        # writer (no queue, no blocking) since the VM runs on this thread.
+        if exec_mode == "thread":
+            gcap = gfx_queue_size if gfx_queue_size is not None else GFX_QUEUE_CAPACITY
+            self.gfx_queue = CommandQueue(gcap)
+        else:
+            self.gfx_queue = DirectGraphics(self.gfx_surface)
 
         self.session = Session(
             cols, rows, self.gfx_queue, self.input_ring,
             workdir=workdir, autoload=autoload, autorun=autorun,
             cycle_steps=cycle_steps if cycle_steps is not None else CYCLE_STEPS,
             cycle_period=cycle_period if cycle_period is not None else CYCLE_PERIOD,
-            debug_throttle=debug_throttle)
+            debug_throttle=debug_throttle,
+            vsync_enabled=(exec_mode == "main"))
 
         self.confirm_quit = False
         self.show_fps = show_fps
@@ -79,9 +89,14 @@ class App:
             (pyxel.KEY_SPACE, KEY_BTN3, False),
         ]
 
-        self.session_thread = threading.Thread(target=self.session.run,
-                                                daemon=True)
-        self.session_thread.start()
+        # Threaded mode runs the VM on its own thread; main-driven mode drives it
+        # from update() each frame (no thread started).
+        if exec_mode == "thread":
+            self.session_thread = threading.Thread(target=self.session.run,
+                                                    daemon=True)
+            self.session_thread.start()
+        else:
+            self.session_thread = None
 
     def run(self):
         """Enter the Pyxel main loop (blocks until the window closes)."""
@@ -111,6 +126,13 @@ class App:
             self.session.request_break()
 
         self._capture_input()
+
+        # Main-driven mode: advance the VM on this thread, one frame's worth.
+        if self.exec_mode == "main":
+            self.session.poll_input()
+            if self.session.mode == "RUN":
+                self.session.run_frame(self.steps_per_frame)
+            self.session.screen.publish()
 
     def _capture_input(self):
         # Typed text -> char events.

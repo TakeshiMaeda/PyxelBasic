@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Threaded runtime plumbing between the BASIC VM and the Pyxel main thread.
+"""Runtime plumbing between the BASIC VM and the Pyxel front end.
 
-The interpreter runs on its own thread and must never touch Pyxel directly.
-This module provides the Pyxel-independent glue:
+The interpreter never touches Pyxel directly; this module provides the
+Pyxel-independent glue used by the two execution modes (see app.py / session.py).
+Some pieces are mode-independent, others are specific to one mode:
 
-- InputState  : a thread-safe snapshot of the input devices (kept available as a
-                fallback level-state source; the active path is InputRing).
-- InputRing   : a bounded SPSC event ring (main produces key/char events, the VM
-                consumes) and KeyState, which derives STICK/BUTTON/INKEY$ from it.
-- CommandQueue: a bounded, thread-safe queue of graphics commands. The VM
-                enqueues; the main thread drains and applies them to the graphics
-                surface. The bound just caps memory; pacing is the VM throttle.
+- InputRing    : a bounded SPSC event ring (the front end produces key/char
+                 events, the VM consumes them) plus KeyState, which derives
+                 STICK/BUTTON/INKEY$ from the event stream. Used in BOTH modes.
+- CommandQueue : a bounded, thread-safe queue of graphics commands. The VM
+                 enqueues; the main thread drains and applies them to the graphics
+                 surface. THREAD MODE only (it crosses the VM/main-thread boundary).
+- DirectGraphics: a same-thread graphics target that applies each command to the
+                 surface immediately. MAIN-DRIVEN MODE only (the VM runs on the
+                 main thread, so no queue or boundary is needed).
+- InputState   : a thread-safe level snapshot of the input devices. Kept as a
+                 reserved fallback; not on the active path of either mode.
 
 None of this imports Pyxel, so the interpreter side stays headless-testable.
 """
@@ -207,3 +212,38 @@ class CommandQueue:
             self._dq.clear()
             self._stop = False
             self._cond.notify_all()
+
+
+class DirectGraphics:
+    """Same-thread graphics target for the main-driven execution mode.
+
+    SessionIO emits graphics as (method_name, args) tuples through put(). In the
+    threaded mode those go to a CommandQueue that the Pyxel main thread drains;
+    in the main-driven mode the VM already runs on the main thread, so each
+    command is applied to the graphics surface immediately. This sidesteps the
+    bounded-queue blocking that would deadlock a single thread (a full queue with
+    no concurrent drainer). The wait/stop/reset/drain methods are no-ops so this
+    is drop-in compatible wherever a CommandQueue is expected.
+    """
+
+    def __init__(self, surface):
+        self.surface = surface
+
+    def put(self, cmd):
+        name, args = cmd
+        getattr(self.surface, name)(*args)
+
+    def drain(self, console=None):
+        pass
+
+    def wait_empty(self):
+        pass
+
+    def wait_size_le(self, n):
+        pass
+
+    def stop(self):
+        pass
+
+    def reset(self):
+        pass

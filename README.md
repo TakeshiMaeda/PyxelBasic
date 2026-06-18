@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is a prototype (v0.1.0).
+> This is version 0.1.1.
 
 ## Features
 
@@ -15,8 +15,9 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 - Numeric and string variables, and multi-dimensional arrays
 - Built-in functions for strings, math, random numbers, and input
 - Point and line graphics plus a text screen
-- The BASIC VM runs on a separate thread from Pyxel's render/input loop
+- Switchable execution model (startup option): the Pyxel main loop or a separate thread
 - Save / load programs to files (`SAVE` / `LOAD`)
+- Runs on Pyxel (use of Pyxel's own features is planned)
 
 ## Requirements
 
@@ -42,6 +43,7 @@ python main.py hello                load hello.bas on startup (shorthand)
 python main.py --load hello         same as above
 python main.py --load stick --run   load and run automatically
 python main.py --workdir ./mybas    set the SAVE/LOAD directory
+python main.py --exec-mode thread   run BASIC on a separate thread
 python main.py --showfps            show the frame rate in the title bar
 python main.py --version            print the version and exit
 python main.py --help               show help and exit
@@ -54,12 +56,17 @@ Options:
   changed from inside the interpreter. Defaults to the bundled `samples/`.
 - `--run` run the loaded program automatically (requires `--load`).
 - `--showfps` show the real frame rate in the window title bar.
-- `--gfx-queue-size N` capacity of the graphics command queue (default 1024).
-- `--vm-cycle-steps N` / `--vm-cycle-ms MS` tune the BASIC VM's execution pace
-  (statements per cycle / target cycle period in ms). See "Execution Pacing and
-  VSYNC" in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
-- `--debug-throttle` print the measured execution pace (sleep floor and effective
-  rate) to standard error at startup.
+- `--exec-mode {main,thread}` choose the execution model (default main). In main
+  mode the Pyxel main loop drives the VM each frame and `VSYNC` is active; in
+  thread mode the VM runs on a separate thread and `VSYNC` is a no-op. See
+  "Execution Pacing and VSYNC" in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
+- `--steps-per-frame N` (main mode) statements run per frame (default 800).
+- `--gfx-queue-size N` (thread mode) capacity of the graphics command queue (default 1024).
+- `--vm-cycle-steps N` / `--vm-cycle-ms MS` (thread mode) tune the BASIC VM's
+  execution pace (statements per cycle / target cycle period in ms). See
+  "Execution Pacing and VSYNC" in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
+- `--debug-throttle` (thread mode) print the measured execution pace (sleep floor
+  and effective rate) to standard error at startup.
 - `--version` print the version and exit without opening a window.
 - `-h`, `--help` show the help message and exit.
 

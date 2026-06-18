@@ -5,7 +5,7 @@ English | [日本語](REFERENCE.ja.md)
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
-- Target version: v0.1.0
+- Target version: v0.1.1
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -96,7 +96,7 @@ function names, operators). String literals (`"..."`) and the comment text after
 ### 3.2 Run Model
 
 - `RUN` executes the program in line-number order.
-- The BASIC VM runs sequentially on a separate thread from Pyxel's render/input loop (60 FPS), and its execution pace is set by an internal throttle (it is not locked to the frame). The VM updates the screen (text and graphics) and the main thread displays that state every frame. See [Execution Pacing and VSYNC](#10-execution-pacing-and-vsync) for tuning the pace.
+- The execution model is selected with the startup option `--exec-mode {main,thread}` (default `main`). In main mode the Pyxel main loop runs up to `--steps-per-frame` statements each frame, and when it reaches a VSYNC / frame break it ends that frame and continues on the next. In thread mode the BASIC VM runs sequentially on a separate thread. The program logic and output are the same in either mode. See [Execution Pacing and VSYNC](#10-execution-pacing-and-vsync) for details.
 - When `INPUT` is reached, execution waits for input; it resumes after the user types a line and presses Enter.
 - When `END` / `STOP` is reached, or the last line is passed, execution ends, `OK` is displayed, and it returns to edit mode.
 - Pressing **Ctrl+C** during a run (or while waiting for `INPUT`) interrupts it: `BREAK in line <line>` is displayed and it returns to edit mode. The program is kept, so you can edit and re-run.
@@ -132,7 +132,7 @@ Management commands entered at the prompt without a line number.
 | `LIST` | Display the whole program |
 | `LIST n` | Display only line n |
 | `LIST n,m` | Display lines n through m |
-| `NEW` | Erase the entire program |
+| `NEW` | Erase the entire program (in main mode, also resets the frame-break settings) |
 | `RENUM` | Renumber lines starting at 10 in steps of 10 |
 | `RENUM start` | Renumber from `start` in steps of 10 |
 | `RENUM start,step` | Renumber from `start` in steps of `step` |
@@ -393,7 +393,7 @@ RANDOMIZE [seed]
 Initializes the random number generator. If the seed is omitted, it is initialized from the operating system's randomness source, or from the current system time when that source is unavailable.
 
 ### VSYNC
-A no-op kept for backward compatibility. Only `VSYNC LIST` produces output; every other form does nothing (and is not an error). See [Execution Pacing and VSYNC](#10-execution-pacing-and-vsync).
+A frame-control statement. In main mode it controls frame breaks (see [Execution Pacing and VSYNC](#10-execution-pacing-and-vsync)). In thread mode it is a no-op: only `VSYNC LIST` prints `FRAME BREAK: (none)`, and every other form does nothing (and is not an error).
 
 ### END / STOP
 ```
@@ -493,11 +493,54 @@ Ends program execution.
 
 ## 10. Execution Pacing and VSYNC
 
-PyxelBasic runs the **BASIC VM on a separate thread from Pyxel's render/input loop (60 FPS)**. The VM updates the text screen (virtual VRAM) directly and passes graphics to the main thread through a command queue. The main thread displays the retained screen state every frame and delivers input to the VM as events.
+PyxelBasic lets you switch the execution model with the startup option `--exec-mode {main,thread}` (default `main`). The program logic and output are identical in both modes; the only differences are how frames are stepped and whether VSYNC has any effect.
 
-### 10.1 Execution Throttle
+| | main mode (default) | thread mode |
+|---|---|---|
+| Execution | The Pyxel main loop drives the VM each frame | The VM runs sequentially on a separate thread |
+| Statements per frame/cycle | `--steps-per-frame` (default 800) | `--vm-cycle-steps` (default 400) |
+| Pacing | Pyxel's 60 FPS sets the cadence | A compensated throttle (sleep) |
+| VSYNC | Active (frame breaks; see 10.1) | No-op (see 10.2) |
+| Graphics | Drawn immediately | Through a command queue |
 
-The VM is not locked to the frame; a **throttle** sets its execution pace.
+### 10.1 main mode: VSYNC and Frame Breaks
+
+In main mode the Pyxel main loop runs up to `--steps-per-frame` statements each frame. When it reaches a designated statement/function, it ends execution for that frame and continues on the next, so screen updates and input are not missed.
+
+**How frame breaks work**
+
+- Executing (a statement) or evaluating (a function) a frame-break keyword breaks the frame there (after that statement/function has run).
+- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `STICK` `BUTTON`**.
+- The set of targets can be changed at runtime with the `VSYNC` command.
+
+**VSYNC command**
+
+| Syntax | Behavior |
+|---|---|
+| `VSYNC` | Break the frame here (an explicit sync point) |
+| `VSYNC keyword ON` | Add the keyword to the frame-break targets |
+| `VSYNC keyword OFF` | Remove the keyword from the frame-break targets |
+| `VSYNC RESET` | Reset the frame-break settings to their initial state |
+| `VSYNC CLEAR` | Remove every automatic frame-break target (afterwards only an explicit `VSYNC` breaks a frame) |
+| `VSYNC LIST` | List the current frame-break targets as `FRAME BREAK: ...` |
+
+- An invalid keyword (an undefined word) is an error (Section 13, codes 116/117).
+- Settings persist across runs and return to the initial state with `VSYNC RESET` or `NEW`.
+- Writing `VSYNC RESET` at the start of a program lets it run with the default settings, unaffected by prior changes.
+
+```basic
+10 VSYNC PRINT OFF       ' don't break on PRINT (fast batch output)
+20 FOR I = 1 TO 100
+30 PRINT I
+40 NEXT I
+50 VSYNC RESET
+```
+
+In a game main loop, since `PSET` and `STICK` are frame-break targets, it runs frame by frame even without an explicit `VSYNC`; you can also clear the automatic breaks and place explicit `VSYNC` calls for finer control.
+
+### 10.2 thread mode: Execution Throttle and VSYNC No-op
+
+In thread mode the VM runs on a separate thread from Pyxel's render/input loop (60 FPS). The VM updates the text screen (virtual VRAM) directly and passes graphics to the main thread through a command queue. It is not locked to the frame; a throttle sets the execution pace. **In this mode VSYNC is a no-op** (the throttle handles pacing).
 
 - Each cycle executes `--vm-cycle-steps` statements and then waits out the remaining time so the whole cycle takes `--vm-cycle-ms` (the target period in ms) — a frame-limiter approach.
 - The effective rate is roughly `vm-cycle-steps / vm-cycle-ms` statements per second. To go faster, increase `--vm-cycle-steps`.
@@ -512,9 +555,7 @@ The VM is not locked to the frame; a **throttle** sets its execution pace.
 
 > Note: `time.sleep()` has a resolution floor that depends on the OS and the Python version. On Windows it is about 15.6 ms on Python 3.10 and earlier; Python 3.11 and later use a higher-resolution timer, so smaller values take effect. Specifying a `--vm-cycle-ms` below that floor does not shorten the period, so use `--vm-cycle-steps` for fine speed tuning. `--debug-throttle` shows the actual floor and whether the `--vm-cycle-ms` you specified is being honored.
 
-### 10.2 VSYNC Command (a backward-compatible no-op)
-
-The old `VSYNC` (frame-break control) has been removed. **The current `VSYNC` is a no-op** that only accepts the syntax for compatibility with existing programs.
+VSYNC in thread mode (a backward-compatible no-op):
 
 | Syntax | Behavior |
 |---|---|
@@ -584,8 +625,8 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 113 | `Invalid DIM syntax` | Syntax error in a `DIM` |
 | 114 | `Invalid LOCATE syntax` | Syntax error in a `LOCATE` |
 | 115 | `Invalid LINE syntax ('-' required)` | Syntax error in a `LINE` |
-| 116 | `VSYNC: keyword required` | (Cannot occur now that `VSYNC` is a no-op; the code is reserved) |
-| 117 | `VSYNC: ON or OFF required` | (Cannot occur now that `VSYNC` is a no-op; the code is reserved) |
+| 116 | `VSYNC: keyword required` | A `VSYNC` frame-break setting in main mode is missing the keyword (cannot occur in thread mode, where VSYNC is a no-op) |
+| 117 | `VSYNC: ON or OFF required` | `VSYNC <word>` in main mode is missing `ON`/`OFF` (same as above) |
 | 118 | `Unterminated string` | A `"` is not closed |
 | 119 | `Invalid character: 'x'` | An uninterpretable character |
 | 120 | `Invalid comparison operator` | Internal: bad comparison operator |
@@ -610,7 +651,7 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 
 ## 14. Not Yet Implemented / Limitations
 
-Items not yet supported in the current prototype:
+Items not yet supported in the current version:
 
 - **Control structures**: `WHILE`/`DO`
 - **Graphics**: `BOX`, `CIRCLE`, `FILLCIRCLE`, `SPRITE`, `SPRITEDEF`, `PCG`, `PALETTE`

@@ -16,7 +16,7 @@ from pyxelbasic.interpreter import (  # noqa: E402
 from pyxelbasic.errors import Err  # noqa: E402
 from pyxelbasic.keywords import STATEMENTS, FUNCTIONS  # noqa: E402
 from pyxelbasic.runtime import (  # noqa: E402
-    InputState, CommandQueue,
+    InputState, CommandQueue, DirectGraphics,
     InputRing, KeyState, EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
 from pyxelbasic.keywords import (  # noqa: E402
@@ -24,6 +24,7 @@ from pyxelbasic.keywords import (  # noqa: E402
 )
 from pyxelbasic.textscreen import TextScreen  # noqa: E402
 from pyxelbasic.editor import Editor  # noqa: E402
+from pyxelbasic.session import Session, STEPS_PER_FRAME  # noqa: E402
 
 
 class MockIO:
@@ -438,6 +439,82 @@ def test_vsync_noop():
     check("vsync list still prints", any("FRAME BREAK" in s for s in io2.out), True)
 
 
+def test_vsync_threaded_no_framebreak():
+    # Threaded mode (vsync_enabled defaults False): frame_break stays empty and
+    # the interpreter never yields, even on PRINT / STICK.
+    io = MockIO()
+    interp = Interpreter(io)
+    check("threaded frame_break empty", interp.frame_break, set())
+    for ln, src in [(10, 'PRINT STICK(0)'), (20, 'PRINT "X"'), (30, 'END')]:
+        interp.store_line(ln, src)
+    interp.prepare_run()
+    while interp.state == "RUN":
+        interp.step()
+    check("threaded never yields", interp.yield_frame, False)
+
+
+def test_vsync_main_mode_control():
+    # Main-driven mode (vsync_enabled True): the classic frame-break controls.
+    io = MockIO()
+    interp = Interpreter(io, vsync_enabled=True)
+    check("main frame_break has PRINT", "PRINT" in interp.frame_break, True)
+    interp.state = "RUN"
+    interp.jumped = False
+    interp._run_stmt_seq(tokenize("VSYNC LIST"))
+    check("vsync list shows words", io.out[-1].startswith("FRAME BREAK: "), True)
+    check("vsync list not none", "(none)" in io.out[-1], False)
+    interp._run_stmt_seq(tokenize("VSYNC CLEAR"))
+    check("vsync clear empties", interp.frame_break, set())
+    interp._run_stmt_seq(tokenize("VSYNC PRINT ON"))
+    check("vsync word on", "PRINT" in interp.frame_break, True)
+    interp._run_stmt_seq(tokenize("VSYNC PRINT OFF"))
+    check("vsync word off", "PRINT" not in interp.frame_break, True)
+    interp._run_stmt_seq(tokenize("VSYNC RESET"))
+    check("vsync reset restores", "STICK" in interp.frame_break, True)
+
+
+def test_vsync_main_mode_yield_on_eval():
+    # A frame-break statement/function sets yield_frame after the step.
+    io = MockIO()
+    interp = Interpreter(io, vsync_enabled=True)
+    for ln, src in [(10, 'PRINT STICK(0)'), (20, 'END')]:
+        interp.store_line(ln, src)
+    interp.prepare_run()
+    interp.step()
+    check("main mode yields on frame-break", interp.yield_frame, True)
+
+
+def test_session_run_frame_yields():
+    # Session.run_frame honours yield_frame: one frame-break statement per frame.
+    gfx = _Recorder()
+    s = Session(64, 42, DirectGraphics(gfx), InputRing(), vsync_enabled=True)
+    for ln, src in [(10, 'PRINT "A"'), (20, 'PRINT "B"'), (30, 'END')]:
+        s.interp.store_line(ln, src)
+    s._start_run()
+    s.run_frame(STEPS_PER_FRAME)
+    check("run_frame yields after frame-break", s.interp.cur_line, 10)
+    check("session still running", s.mode, "RUN")
+    s.run_frame(STEPS_PER_FRAME)
+    check("next frame advances", s.interp.cur_line, 20)
+    s.run_frame(STEPS_PER_FRAME)   # runs line 30 (END) -> back to edit mode
+    check("session ends", s.mode, "EDIT")
+
+
+def test_direct_graphics_immediate():
+    # DirectGraphics applies each put() to the surface immediately (no queue).
+    rec = _Recorder()
+    d = DirectGraphics(rec)
+    d.put(("pset", (1, 2, 7)))
+    d.put(("cls", ()))
+    check("direct gfx immediate", rec.calls, [("pset", 1, 2, 7), ("cls",)])
+    # The queue-compatible methods are no-ops and must not raise.
+    d.drain(rec)
+    d.wait_empty()
+    d.stop()
+    d.reset()
+    check("direct gfx noop methods", len(rec.calls), 2)
+
+
 def test_mod_fraction():
     # MOD integerizes both sides; a divisor with 0 < |b| < 1 integerizes to 0,
     # which must raise a BASIC error (not crash with a Python ZeroDivisionError).
@@ -719,7 +796,10 @@ def main():
         test_read_into_array,
         test_restore_line, test_restore_line_not_data,
         test_input, test_logical, test_graphics,
-        test_vsync_noop, test_mod_fraction,
+        test_vsync_noop, test_vsync_threaded_no_framebreak,
+        test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
+        test_session_run_frame_yields, test_direct_graphics_immediate,
+        test_mod_fraction,
         test_renum, test_renum_keeps_rem,
         test_store_uppercases_code,
         test_runtime_input_state, test_runtime_command_queue_order,

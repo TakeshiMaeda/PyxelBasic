@@ -5,7 +5,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.0です。
+> 現在のバージョンはv0.1.1です。
 
 ## 特徴
 
@@ -15,8 +15,9 @@
 - 数値・文字列の変数と多次元配列
 - 文字列・数学・乱数・入力の組み込み関数
 - 点・線のグラフィック描画とテキスト画面
-- BASIC VM を Pyxel の描画・入力ループとは別スレッドで実行
+- BASICの駆動方式、Pyxelメインループ／別スレッドを起動引数で切替
 - プログラムのファイル保存・読み込み（`SAVE` / `LOAD`）
+- Pyxel上で動作し、Pyxelの機能を利用可能予定
 
 ## 必要環境
 
@@ -42,6 +43,7 @@ python main.py hello                起動時に hello.bas を読み込む（短
 python main.py --load hello         上と同じ
 python main.py --load stick --run   読み込んで自動実行
 python main.py --workdir ./mybas    SAVE/LOAD 用ディレクトリを指定
+python main.py --exec-mode thread   BASICを別スレッドで実行
 python main.py --showfps            フレームレートをタイトルバーに表示
 python main.py --version            バージョンを表示して終了
 python main.py --help               ヘルプを表示して終了
@@ -54,9 +56,11 @@ python main.py --help               ヘルプを表示して終了
   変更できない。省略時は同梱の `samples/`。
 - `--run` 読み込んだプログラムを自動実行する（`--load` が必要）。
 - `--showfps` 実フレームレートをウィンドウのタイトルバーに表示する。
-- `--gfx-queue-size N` グラフィックコマンドキューの容量（既定 1024）。
-- `--vm-cycle-steps N` / `--vm-cycle-ms MS` BASIC VM の実行ペース調整（1 サイクルあたりの命令数 / サイクルの目標周期 ms）。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
-- `--debug-throttle` 実行ペースの実測値（sleep 下限・実効レート）を起動時に標準エラーへ出力する。
+- `--exec-mode {main,thread}` 実行モデルの選択（既定 main）。main は Pyxel のメインループが毎フレーム VM を駆動し `VSYNC` が有効、thread は VM を別スレッドで実行し `VSYNC` は no-op。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
+- `--steps-per-frame N` main モードで 1 フレームに実行する命令数（既定 800）。
+- `--gfx-queue-size N`（thread モード）グラフィックコマンドキューの容量（既定 1024）。
+- `--vm-cycle-steps N` / `--vm-cycle-ms MS`（thread モード）BASIC VM の実行ペース調整（1 サイクルあたりの命令数 / サイクルの目標周期 ms）。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
+- `--debug-throttle`（thread モード）実行ペースの実測値（sleep 下限・実効レート）を起動時に標準エラーへ出力する。
 - `--version` ウィンドウを開かずにバージョンだけ表示して終了する。
 - `-h`, `--help` ヘルプを表示して終了する。
 
