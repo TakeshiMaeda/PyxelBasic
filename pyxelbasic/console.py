@@ -32,8 +32,30 @@ class PyxelGraphicsSurface:
     def pset(self, x, y, col):
         self.img.pset(x, y, col)
 
+    def pget(self, x, y):
+        return self.img.pget(x, y)
+
     def line(self, x1, y1, x2, y2, col):
         self.img.line(x1, y1, x2, y2, col)
+
+    def rect(self, x1, y1, x2, y2, col):
+        x, y = min(x1, x2), min(y1, y2)
+        w, h = abs(x2 - x1) + 1, abs(y2 - y1) + 1
+        self.img.rect(x, y, w, h, col)
+
+    def rectb(self, x1, y1, x2, y2, col):
+        x, y = min(x1, x2), min(y1, y2)
+        w, h = abs(x2 - x1) + 1, abs(y2 - y1) + 1
+        self.img.rectb(x, y, w, h, col)
+
+    def elli(self, x, y, rx, ry, col):
+        self.img.elli(x - rx, y - ry, 2 * rx + 1, 2 * ry + 1, col)
+
+    def ellib(self, x, y, rx, ry, col):
+        self.img.ellib(x - rx, y - ry, 2 * rx + 1, 2 * ry + 1, col)
+
+    def tri(self, x1, y1, x2, y2, x3, y3, col):
+        self.img.tri(x1, y1, x2, y2, x3, y3, col)
 
 
 class PyxelRenderer:

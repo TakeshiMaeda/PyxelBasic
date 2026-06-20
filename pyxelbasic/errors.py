@@ -37,6 +37,7 @@ class Err(IntEnum):
     UNTERMINATED_STRING = 118
     INVALID_CHAR = 119
     INVALID_COMPARISON_OP = 120
+    INVALID_CIRCLE_SYNTAX = 121
 
     # --- 2xx: type ---
     NUMBER_REQUIRED = 201
@@ -83,6 +84,7 @@ MESSAGES = {
     Err.UNTERMINATED_STRING: "Unterminated string",
     Err.INVALID_CHAR: "Invalid character: '%s'",
     Err.INVALID_COMPARISON_OP: "Invalid comparison operator",
+    Err.INVALID_CIRCLE_SYNTAX: "Invalid CIRCLE syntax",
 
     # 2xx: type
     Err.NUMBER_REQUIRED: "Number required",

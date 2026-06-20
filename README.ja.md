@@ -5,7 +5,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.1です。
+> 現在のバージョンはv0.1.2です。
 
 ## 特徴
 
@@ -86,8 +86,10 @@ RUN
 | `samples/hello.bas` | HELLO WORLD |
 | `samples/count.bas` | FOR/NEXT と式の利用 |
 | `samples/graph.bas` | 線・点によるグラフィック描画 |
+| `samples/circles.bas` | CIRCLE と比率で円・楕円を描く |
 | `samples/stick.bas` | 方向キーで点を動かす例（STICK 入力） |
 | `samples/meteo.bas` | 方向キーで上から降ってくる隕石をよける（当たり判定なし） |
+| `samples/fireworks.bas` | 花火を打ち上げる |
 | `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト（機能ごとに OK/NG を表示） |
 
 読み込んで実行する例:

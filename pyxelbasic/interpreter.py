@@ -6,6 +6,7 @@ Screen I/O goes through the IOTarget interface, so this module does not
 depend on Pyxel (easy to test or to swap the console out).
 """
 
+import math
 import random
 
 from .errors import BasicError, Err
@@ -434,6 +435,11 @@ class Evaluator:
     def _fn_button(self, args):
         return self.interp.io.button(int(self._num(args[0])))
 
+    def _fn_point(self, args):
+        x = int(self._num(args[0]))
+        y = int(self._num(args[1]))
+        return self.interp.io.point(x, y)
+
     # --- Helpers ---
     def _num(self, v):
         if isinstance(v, str):
@@ -762,7 +768,12 @@ class Interpreter:
             self.data_ptr = 0
 
     def _do_cls(self, toks):
-        self.io.cls()
+        # CLS [mask]: 1 = text only, 2 = graphics only, 3 = both (bit OR).
+        # No argument clears both (mask 3), as before.
+        mask = 3
+        if len(toks) > 1:
+            mask = int(self._eval_from(toks, 1))
+        self.io.cls(mask)
 
     def _do_color(self, toks):
         v = self._eval_from(toks, 1)
@@ -1005,8 +1016,9 @@ class Interpreter:
             col = int(args[2])
         self.io.pset(int(args[0]), int(args[1]), col)
 
-    def _do_line(self, toks):
-        # LINE(x1,y1)-(x2,y2)[,col]
+    def _parse_line_coords(self, toks):
+        # Parse "(x1,y1)-(x2,y2)[,col]" and return (x1, y1, x2, y2, col).
+        # col is None when omitted (the IO layer resolves the current color).
         ev = Evaluator(toks, self, 1)
         p1 = ev.parse_arglist()
         if ev.peek() != ("OP", "-"):
@@ -1017,7 +1029,106 @@ class Interpreter:
         if ev.peek()[0] == "COMMA":
             ev.advance()
             col = int(ev.parse())
-        self.io.line(int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1]), col)
+        return int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1]), col
+
+    def _do_line(self, toks):
+        # LINE(x1,y1)-(x2,y2)[,col]
+        x1, y1, x2, y2, col = self._parse_line_coords(toks)
+        self.io.line(x1, y1, x2, y2, col)
+
+    def _do_lineb(self, toks):
+        # LINEB(x1,y1)-(x2,y2)[,col] : rectangle outline
+        x1, y1, x2, y2, col = self._parse_line_coords(toks)
+        self.io.rectb(x1, y1, x2, y2, col)
+
+    def _do_linebf(self, toks):
+        # LINEBF(x1,y1)-(x2,y2)[,col] : filled rectangle
+        x1, y1, x2, y2, col = self._parse_line_coords(toks)
+        self.io.rect(x1, y1, x2, y2, col)
+
+    def _parse_circle_args(self, toks):
+        # CIRCLE(x,y),r,col[,start][,end][,ratio]
+        # Returns (x, y, r, col, start, end, ratio); omitted optionals are None.
+        # Middle optionals may be left empty (consecutive commas) so that ratio
+        # can be given without the angles, e.g. CIRCLE(x,y),r,c,,,2.
+        ev = Evaluator(toks, self, 1)
+        center = ev.parse_arglist()
+        if len(center) != 2:
+            raise BasicError(Err.INVALID_CIRCLE_SYNTAX)
+        x, y = int(center[0]), int(center[1])
+        slots = []
+        while ev.peek()[0] == "COMMA":
+            ev.advance()
+            if ev.peek()[0] in ("COMMA", None):
+                slots.append(None)        # empty slot
+            else:
+                slots.append(ev.parse())
+        if len(slots) < 2 or slots[0] is None or slots[1] is None or len(slots) > 5:
+            raise BasicError(Err.INVALID_CIRCLE_SYNTAX)
+        r = slots[0]
+        col = int(slots[1])
+        start = slots[2] if len(slots) >= 3 else None
+        end = slots[3] if len(slots) >= 4 else None
+        ratio = slots[4] if len(slots) >= 5 else None
+        return x, y, r, col, start, end, ratio
+
+    @staticmethod
+    def _circle_radii(r, ratio):
+        # MSX-BASIC aspect: ratio = ry / rx (vertical / horizontal); r is always
+        # the longer (major) semi-axis. ratio==1 -> circle; ratio>1 -> tall
+        # (ry=r, rx=r/ratio); ratio<1 -> wide (rx=r, ry=r*ratio).
+        r = float(r)
+        ratio = 1.0 if ratio is None else float(ratio)
+        if ratio <= 0:
+            ratio = 1.0
+        if ratio > 1.0:
+            rx, ry = r / ratio, r
+        elif ratio < 1.0:
+            rx, ry = r, r * ratio
+        else:
+            rx = ry = r
+        return int(round(rx)), int(round(ry))
+
+    def _do_circle(self, toks):
+        self._draw_circle(toks, fill=False)
+
+    def _do_circlebf(self, toks):
+        self._draw_circle(toks, fill=True)
+
+    def _draw_circle(self, toks, fill):
+        x, y, r, col, start, end, ratio = self._parse_circle_args(toks)
+        rx, ry = self._circle_radii(r, ratio)
+        if start is None and end is None:
+            # Full ellipse/circle via the Pyxel primitive.
+            if fill:
+                self.io.elli(x, y, rx, ry, col)
+            else:
+                self.io.ellib(x, y, rx, ry, col)
+            return
+        # Arc: rasterize on this (Pyxel-independent) side and emit primitives.
+        s = 0.0 if start is None else float(start)
+        e = 2 * math.pi if end is None else float(end)
+        self._draw_arc(fill, x, y, rx, ry, s, e, col)
+
+    def _draw_arc(self, fill, x, y, rx, ry, start, end, col):
+        # Angle is measured from 3 o'clock (right), counterclockwise (MSX style).
+        # Screen y grows downward, so the y term is subtracted.
+        span = end - start
+        if span <= 0:
+            span += 2 * math.pi
+        n = min(720, max(8, int(max(rx, ry, 1) * span)))
+        pts = []
+        for i in range(n + 1):
+            th = start + span * i / n
+            px = int(round(x + rx * math.cos(th)))
+            py = int(round(y - ry * math.sin(th)))
+            pts.append((px, py))
+        if fill:
+            for i in range(n):
+                self.io.tri(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], col)
+        else:
+            for i in range(n):
+                self.io.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], col)
 
     def _do_randomize(self, toks):
         if len(toks) > 1:

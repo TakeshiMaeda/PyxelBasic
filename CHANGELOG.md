@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+- Added an argument to `CLS`
+- Added line-numberless range forms to `LIST`: `LIST -100`, `LIST 200-`
+- Added `LINEB` / `LINEBF` to draw a rectangle / filled rectangle
+- Added the `POINT(x, y)` function returning the color at a coordinate
+- Added `CIRCLE` / `CIRCLEBF` to draw an ellipse / filled ellipse
+
 ## 0.1.1
 - Added `--exec-mode {main,thread}` to switch the execution model (default main)
 - main mode: the Pyxel main loop drives the VM each frame, with VSYNC frame-break active

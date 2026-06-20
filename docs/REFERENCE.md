@@ -5,7 +5,7 @@ English | [日本語](REFERENCE.ja.md)
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
-- Target version: v0.1.1
+- Target version: v0.1.2
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -131,7 +131,9 @@ Management commands entered at the prompt without a line number.
 | `RUN` | Run the program from the beginning |
 | `LIST` | Display the whole program |
 | `LIST n` | Display only line n |
-| `LIST n,m` | Display lines n through m |
+| `LIST n-m` | Display lines n through m |
+| `LIST -m` | Display from the top through line m |
+| `LIST n-` | Display from line n to the end |
 | `NEW` | Erase the entire program (in main mode, also resets the frame-break settings) |
 | `RENUM` | Renumber lines starting at 10 in steps of 10 |
 | `RENUM start` | Renumber from `start` in steps of 10 |
@@ -357,9 +359,16 @@ RESTORE [line]
 
 ### CLS
 ```
-CLS
+CLS [mask]
 ```
-Clears the text screen and graphics, and moves the cursor to the top-left.
+Clears the screen and, when text is cleared, moves the cursor to the top-left. The optional `mask` selects what to clear (bit OR):
+
+| mask | Clears |
+|---|---|
+| 1 | Text only |
+| 2 | Graphics only |
+| 3 | Both |
+| (omitted) | Both |
 
 ### LOCATE
 ```
@@ -385,6 +394,29 @@ Draws a point. If the color is omitted, the current `COLOR` color is used.
 LINE (X1, Y1)-(X2, Y2) [, color]
 ```
 Draws a line. If the color is omitted, the current `COLOR` color is used.
+
+### LINEB / LINEBF
+```
+LINEB  (X1, Y1)-(X2, Y2) [, color]
+LINEBF (X1, Y1)-(X2, Y2) [, color]
+```
+`LINEB` draws a rectangle outline and `LINEBF` draws a filled rectangle, using the two points as opposite corners. If the color is omitted, the current `COLOR` color is used.
+
+### CIRCLE / CIRCLEBF
+```
+CIRCLE   (X, Y), radius, color [, start] [, end] [, ratio]
+CIRCLEBF (X, Y), radius, color [, start] [, end] [, ratio]
+```
+`CIRCLE` draws a circle/ellipse outline and `CIRCLEBF` draws a filled one. `color` is required.
+
+- `ratio` is the aspect ratio (vertical radius / horizontal radius); default 1.
+  - `ratio = 1`: a circle (both radii equal `radius`).
+  - `ratio > 1`: a tall ellipse (vertical `radius`, horizontal `radius / ratio`).
+  - `ratio < 1`: a wide ellipse (horizontal `radius`, vertical `radius * ratio`).
+  - `radius` is always the longer (major) semi-axis (MSX-BASIC convention).
+- `start` / `end` are arc angles in radians, measured from the 3 o'clock direction and going **counterclockwise** (MSX-BASIC convention). When given, only the arc from `start` to `end` is drawn; for `CIRCLEBF` the arc is filled as a pie wedge. Omitting both draws the full shape. Omitting only one fills in 0 (start) or 2π (end).
+
+To pass `ratio` without angles, leave the angle slots empty: `CIRCLE (X, Y), R, C, , , 1.5`.
 
 ### RANDOMIZE
 ```
@@ -489,6 +521,17 @@ Ends program execution.
 20 IF BUTTON(0) THEN PRINT "Z PRESSED"
 ```
 
+### 9.5 Graphics Functions
+
+| Function | Returns |
+|---|---|
+| `POINT(x, y)` | The color number of the graphics pixel at (x, y) |
+
+```basic
+10 PSET (10, 13), 11
+20 CC = POINT(10, 13)      ' CC = 11
+```
+
 ---
 
 ## 10. Execution Pacing and VSYNC
@@ -573,7 +616,8 @@ VSYNC in thread mode (a backward-compatible no-op):
 
 ### 11.2 Graphics
 
-- Drawing statements: `PSET`, `LINE`.
+- Drawing statements: `PSET`, `LINE`, `LINEB`, `LINEBF`, `CIRCLE`, `CIRCLEBF`.
+- Reading: `POINT(x, y)` returns the color at a pixel.
 - Graphics are drawn to a dedicated layer and retained until `CLS` (no need to re-run every frame).
 
 ### 11.3 Text Output and Control Characters
@@ -630,6 +674,7 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 118 | `Unterminated string` | A `"` is not closed |
 | 119 | `Invalid character: 'x'` | An uninterpretable character |
 | 120 | `Invalid comparison operator` | Internal: bad comparison operator |
+| 121 | `Invalid CIRCLE syntax` | Syntax error in a `CIRCLE` / `CIRCLEBF` (e.g. a missing radius or color) |
 | 201 | `Number required` | A string was used in a numeric operation |
 | 202 | `Type mismatch in comparison` | A number was compared with a string |
 | 203 | `Cannot assign string to numeric variable: name` | Type mismatch on assignment |
@@ -689,6 +734,7 @@ The `samples/` directory includes the following.
 | `hello.bas` | HELLO WORLD |
 | `count.bas` | Using FOR/NEXT and expressions |
 | `graph.bas` | Graphics with lines and points |
+| `circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
 | `stick.bas` | Move a dot with the arrow keys (STICK input) |
 | `meteo.bas` | Dodge falling meteors (no collision detection) |
 | `fireworks.bas` | Fireworks display |

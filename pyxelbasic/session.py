@@ -59,6 +59,36 @@ EDITOR_KEY_ACTIONS = {
 }
 
 
+def parse_list_range(toks):
+    """Parse a LIST command's tokens into a (start, end) line range.
+
+    Forms (start/end are None when open-ended):
+      LIST          -> (None, None)   all lines
+      LIST 100      -> (100, 100)     a single line
+      LIST 100-200  -> (100, 200)
+      LIST -100     -> (None, 100)    from the top through 100
+      LIST 200-     -> (200, None)    from 200 to the end
+    """
+    rest = toks[1:]
+    if not rest:
+        return None, None
+    dash_idx = None
+    for i, t in enumerate(rest):
+        if t == ("OP", "-"):
+            dash_idx = i
+            break
+    if dash_idx is None:
+        nums = [v for (k, v) in rest if k == "NUM"]
+        if nums:
+            return int(nums[0]), int(nums[0])
+        return None, None
+    before = [v for (k, v) in rest[:dash_idx] if k == "NUM"]
+    after = [v for (k, v) in rest[dash_idx + 1:] if k == "NUM"]
+    start = int(before[0]) if before else None
+    end = int(after[0]) if after else None
+    return start, end
+
+
 class SessionIO:
     """IOTarget used by the interpreter while the session runs.
 
@@ -66,15 +96,21 @@ class SessionIO:
     are enqueued for the main thread; input reads consult the key state.
     """
 
-    def __init__(self, screen, gfx_queue, keys):
+    def __init__(self, screen, gfx_queue, keys, surface=None):
         self.screen = screen
         self.gfx = gfx_queue
         self.keys = keys
+        # The graphics surface is needed for pixel read-back (POINT). It may be
+        # given explicitly; otherwise a same-thread DirectGraphics exposes it.
+        self.surface = surface if surface is not None else getattr(gfx_queue, "surface", None)
 
     # --- text (direct to the VM-owned screen) ---
-    def cls(self):
-        self.screen.cls()               # text grid (here)
-        self.gfx.put(("cls", ()))       # graphics surface (main thread)
+    def cls(self, mask=3):
+        # mask: bit 1 = text, bit 2 = graphics (3 = both, the default).
+        if mask & 1:
+            self.screen.cls()           # text grid (here)
+        if mask & 2:
+            self.gfx.put(("cls", ()))   # graphics surface (main thread)
 
     def set_color(self, col):
         self.screen.set_color(col)
@@ -97,6 +133,34 @@ class SessionIO:
         c = self.screen.color if col is None else col
         self.gfx.put(("line", (x1, y1, x2, y2, c)))
 
+    def rect(self, x1, y1, x2, y2, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("rect", (x1, y1, x2, y2, c)))
+
+    def rectb(self, x1, y1, x2, y2, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("rectb", (x1, y1, x2, y2, c)))
+
+    def elli(self, x, y, rx, ry, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("elli", (x, y, rx, ry, c)))
+
+    def ellib(self, x, y, rx, ry, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("ellib", (x, y, rx, ry, c)))
+
+    def tri(self, x1, y1, x2, y2, x3, y3, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("tri", (x1, y1, x2, y2, x3, y3, c)))
+
+    def point(self, x, y):
+        # Read back a pixel. Flush pending draws first so the surface is current
+        # (no-op in main-driven mode where draws apply immediately); then read.
+        self.gfx.wait_empty()
+        if self.surface is None:
+            return 0
+        return self.surface.pget(x, y)
+
     # --- input (read the derived key state) ---
     def inkey(self):
         return self.keys.inkey()
@@ -112,14 +176,14 @@ class Session:
     def __init__(self, cols, rows, gfx_queue, input_ring, workdir=None,
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
-                 debug_throttle=False, vsync_enabled=False):
+                 debug_throttle=False, vsync_enabled=False, gfx_surface=None):
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
         self.keys = KeyState()
         self.gfx_queue = gfx_queue
         self.input_ring = input_ring
-        self.io = SessionIO(self.screen, gfx_queue, self.keys)
+        self.io = SessionIO(self.screen, gfx_queue, self.keys, gfx_surface)
         # vsync_enabled is True only in the main-driven execution mode, where the
         # interpreter honours frame-break/VSYNC; the threaded mode leaves it off.
         self.interp = Interpreter(self.io, vsync_enabled=vsync_enabled)
@@ -370,12 +434,7 @@ class Session:
             self.interp.state = "EDIT"
 
     def _cmd_list(self, toks):
-        nums = [v for (k, v) in toks[1:] if k == "NUM"]
-        start = end = None
-        if len(nums) == 1:
-            start = end = int(nums[0])
-        elif len(nums) >= 2:
-            start, end = int(nums[0]), int(nums[1])
+        start, end = parse_list_range(toks)
         for ln, src in self.interp.list_lines(start, end):
             self.screen.print_line("%d %s" % (ln, src))
 

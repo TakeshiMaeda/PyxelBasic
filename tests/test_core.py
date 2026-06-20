@@ -24,7 +24,7 @@ from pyxelbasic.keywords import (  # noqa: E402
 )
 from pyxelbasic.textscreen import TextScreen  # noqa: E402
 from pyxelbasic.editor import Editor  # noqa: E402
-from pyxelbasic.session import Session, STEPS_PER_FRAME  # noqa: E402
+from pyxelbasic.session import Session, STEPS_PER_FRAME, parse_list_range  # noqa: E402
 
 
 class MockIO:
@@ -34,6 +34,7 @@ class MockIO:
         self.out = []
         self._cur = ""        # current line buffer (named to avoid clashing with the line method)
         self.gfx = []
+        self.pixels = {}      # (x, y) -> color, fed by pset; read back by point
         self.inputs = list(inputs or [])
 
     def print_text(self, text):
@@ -44,8 +45,10 @@ class MockIO:
         self.out.append(self._cur)
         self._cur = ""
 
-    def cls(self):
-        self.out.append("<CLS>")
+    def cls(self, mask=3):
+        self.out.append("<CLS %d>" % mask)
+        if mask & 2:
+            self.pixels.clear()
 
     def set_color(self, col):
         pass
@@ -55,9 +58,28 @@ class MockIO:
 
     def pset(self, x, y, col=None):
         self.gfx.append(("pset", x, y, col))
+        self.pixels[(x, y)] = col
 
     def line(self, x1, y1, x2, y2, col=None):
         self.gfx.append(("line", x1, y1, x2, y2, col))
+
+    def rect(self, x1, y1, x2, y2, col=None):
+        self.gfx.append(("rect", x1, y1, x2, y2, col))
+
+    def rectb(self, x1, y1, x2, y2, col=None):
+        self.gfx.append(("rectb", x1, y1, x2, y2, col))
+
+    def elli(self, x, y, rx, ry, col=None):
+        self.gfx.append(("elli", x, y, rx, ry, col))
+
+    def ellib(self, x, y, rx, ry, col=None):
+        self.gfx.append(("ellib", x, y, rx, ry, col))
+
+    def tri(self, x1, y1, x2, y2, x3, y3, col=None):
+        self.gfx.append(("tri", x1, y1, x2, y2, x3, y3, col))
+
+    def point(self, x, y):
+        return self.pixels.get((x, y), 0)
 
     def inkey(self):
         return ""
@@ -422,6 +444,74 @@ def test_graphics():
     check("line cmd", io.gfx[1], ("line", 0, 0, 100, 100, 11))
 
 
+def test_cls_args():
+    io, _ = run_program([
+        (10, 'CLS 1'),
+        (20, 'CLS 2'),
+        (30, 'CLS 3'),
+        (40, 'CLS'),
+    ])
+    masks = [s for s in io.out if s.startswith("<CLS")]
+    check("cls masks", masks, ["<CLS 1>", "<CLS 2>", "<CLS 3>", "<CLS 3>"])
+
+
+def test_list_range():
+    check("list all", parse_list_range(tokenize("LIST")), (None, None))
+    check("list single", parse_list_range(tokenize("LIST 100")), (100, 100))
+    check("list both", parse_list_range(tokenize("LIST 100-200")), (100, 200))
+    check("list from-top", parse_list_range(tokenize("LIST -100")), (None, 100))
+    check("list to-end", parse_list_range(tokenize("LIST 200-")), (200, None))
+
+
+def test_lineb():
+    io, _ = run_program([
+        (10, 'LINEB (10,10)-(60,40), 8'),
+        (20, 'LINEBF (0,0)-(20,20), 9'),
+    ])
+    check("lineb cmd", io.gfx[0], ("rectb", 10, 10, 60, 40, 8))
+    check("linebf cmd", io.gfx[1], ("rect", 0, 0, 20, 20, 9))
+
+
+def test_circle_full():
+    io, _ = run_program([
+        (10, 'CIRCLE (80,80), 10, 11'),
+        (20, 'CIRCLEBF (40,40), 8, 12'),
+    ])
+    check("circle outline = ellib", io.gfx[0], ("ellib", 80, 80, 10, 10, 11))
+    check("circlebf fill = elli", io.gfx[1], ("elli", 40, 40, 8, 8, 12))
+
+
+def test_circle_ratio():
+    # ratio > 1 -> tall (ry=r, rx=r/ratio); ratio < 1 -> wide (rx=r, ry=r*ratio).
+    io, _ = run_program([
+        (10, 'CIRCLE (50,50), 20, 7, , , 2'),
+        (20, 'CIRCLE (50,50), 20, 7, , , 0.5'),
+    ])
+    check("ratio>1 tall", io.gfx[0], ("ellib", 50, 50, 10, 20, 7))
+    check("ratio<1 wide", io.gfx[1], ("ellib", 50, 50, 20, 10, 7))
+
+
+def test_circle_arc():
+    # An angle range rasterizes to line segments (no ellib/elli emitted).
+    io, _ = run_program([
+        (10, 'CIRCLE (80,80), 20, 11, 0, 1.5'),
+    ])
+    kinds = {g[0] for g in io.gfx}
+    check("arc uses line segments", "line" in kinds, True)
+    check("arc emits no full ellipse", "ellib" in kinds or "elli" in kinds, False)
+
+
+def test_point():
+    io, _ = run_program([
+        (10, 'PSET (5,7), 9'),
+        (20, 'C = POINT(5,7)'),
+        (30, 'PRINT C'),
+        (40, 'PRINT POINT(1,1)'),
+    ])
+    check("point reads set pixel", io.out[0], "9")
+    check("point reads empty pixel", io.out[1], "0")
+
+
 def test_vsync_noop():
     # VSYNC is a no-op now (frame pacing is the VM throttle). Only VSYNC LIST
     # still prints the historical frame-break list; every other form runs
@@ -746,7 +836,8 @@ def test_dispatch_registration():
     expected_statements = {
         "PRINT", "INPUT", "LET", "GOTO", "GOSUB", "RETURN", "IF",
         "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
-        "PSET", "LINE", "END", "STOP", "DATA", "READ", "RESTORE",
+        "PSET", "LINE", "LINEB", "LINEBF", "CIRCLE", "CIRCLEBF",
+        "END", "STOP", "DATA", "READ", "RESTORE",
         "RANDOMIZE", "VSYNC",
     }
     expected_functions = {
@@ -754,7 +845,7 @@ def test_dispatch_registration():
         "ABS", "SGN", "INT", "FIX", "ROUND",
         "SIN", "COS", "TAN", "ATN", "RAD", "DEG",
         "EXP", "LOG", "LOG10", "SQR",
-        "RND", "INKEY$", "STICK", "BUTTON",
+        "RND", "INKEY$", "STICK", "BUTTON", "POINT",
     }
     check("dispatch statements set", STATEMENTS, expected_statements)
     check("dispatch functions set", FUNCTIONS, expected_functions)
@@ -796,6 +887,8 @@ def main():
         test_read_into_array,
         test_restore_line, test_restore_line_not_data,
         test_input, test_logical, test_graphics,
+        test_cls_args, test_list_range, test_lineb,
+        test_circle_full, test_circle_ratio, test_circle_arc, test_point,
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
         test_session_run_frame_yields, test_direct_graphics_immediate,

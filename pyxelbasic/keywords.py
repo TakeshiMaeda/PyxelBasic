@@ -35,6 +35,10 @@ STATEMENT_HANDLERS = {
     "COLOR":     "_do_color",
     "PSET":      "_do_pset",
     "LINE":      "_do_line",
+    "LINEB":     "_do_lineb",
+    "LINEBF":    "_do_linebf",
+    "CIRCLE":    "_do_circle",
+    "CIRCLEBF":  "_do_circlebf",
     "END":       "_do_end",
     "STOP":      "_do_end",
     "READ":      "_do_read",
@@ -58,6 +62,7 @@ FUNCTION_HANDLERS = {
     "VAL":    ("_fn_val",    False),
     "STICK":  ("_fn_stick",  False),
     "BUTTON": ("_fn_button", False),
+    "POINT":  ("_fn_point",  False),
 }
 
 # Single-argument math functions: keyword -> callable applied to one number.
@@ -111,6 +116,8 @@ BUTTON_KEYS = (KEY_BTN0, KEY_BTN1, KEY_BTN2, KEY_BTN3)
 FRAME_BREAK = {
     "PRINT",            # screen output
     "PSET", "LINE",     # drawing statements
+    "LINEB", "LINEBF",  # rectangle drawing
+    "CIRCLE", "CIRCLEBF",  # circle / ellipse drawing
     "STICK", "BUTTON",  # input polling (functions)
 }
 

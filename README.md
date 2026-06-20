@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.1.
+> This is version 0.1.2.
 
 ## Features
 
@@ -93,8 +93,10 @@ RUN
 | `samples/hello.bas` | HELLO WORLD |
 | `samples/count.bas` | Using FOR/NEXT and expressions |
 | `samples/graph.bas` | Graphics with lines and points |
+| `samples/circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
 | `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
 | `samples/meteo.bas` | Dodge meteors falling from the top with the arrow keys (no collision detection) |
+| `samples/fireworks.bas` | Fireworks display |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |
 
 Example of loading and running:
