@@ -114,8 +114,8 @@ For the **complete reference** of implemented statements, functions, and operato
 
 Main elements:
 
-- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
-- Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON`
+- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT`
 - Operators: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
 ## Project Layout
@@ -148,13 +148,11 @@ python tests/test_core.py
 
 This covers lexing, expression evaluation, control structures, arrays, string functions, INPUT, graphics commands, the text screen / editor, input events, RENUM, and more.
 
-## Not Yet Implemented (planned)
+## Planned
 
-- Graphics: `BOX` / `CIRCLE` / `FILLCIRCLE` / `SPRITE` / `SPRITEDEF` / `PCG` / `PALETTE`
-- Sound: `PLAY` (MML)
-- String escapes (`\n`, `\cN`, etc.), Japanese fonts
-
-For details, see "Not Yet Implemented" in [docs/REFERENCE.md](docs/REFERENCE.md).
+- More graphics statements
+- Sound statements
+- Other features
 
 ## Changelog
 

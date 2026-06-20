@@ -107,8 +107,8 @@ RUN
 
 主な要素:
 
-- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `RANDOMIZE` `VSYNC` `END`/`STOP`
-- 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON`
+- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT`
 - 演算子: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
 ## プロジェクト構成
@@ -141,13 +141,11 @@ python tests/test_core.py
 
 字句解析・式評価・制御構造・配列・文字列関数・INPUT・グラフィック命令・テキスト画面／エディタ・入力イベント・RENUM などを検証します。
 
-## 未実装（今後の予定）
+## 今後の予定
 
-- グラフィック: `BOX` / `CIRCLE` / `FILLCIRCLE` / `SPRITE` / `SPRITEDEF` / `PCG` / `PALETTE`
-- サウンド: `PLAY`（MML）
-- 文字列エスケープ（`\n` `\cN` など）、日本語フォント
-
-詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「未実装・制限事項」を参照してください。
+- グラフィック命令の追加
+- サウンド命令の追加
+- その他機能追加
 
 ## 変更履歴
 

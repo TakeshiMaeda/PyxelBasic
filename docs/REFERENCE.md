@@ -3,7 +3,6 @@
 English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
-Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 
 - Target version: v0.1.2
 - Runtime: Python 3.10+ with Pyxel
@@ -26,7 +25,7 @@ Items not yet supported are summarized in "Not Yet Implemented / Limitations".
 11. [Graphics and Text Screen](#11-graphics-and-text-screen)
 12. [Keyboard Input](#12-keyboard-input)
 13. [Error Messages](#13-error-messages)
-14. [Not Yet Implemented / Limitations](#14-not-yet-implemented--limitations)
+14. [Planned Features](#14-planned-features)
 15. [Appendix: Color Palette](#15-appendix-color-palette)
 
 ---
@@ -694,15 +693,11 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 
 ---
 
-## 14. Not Yet Implemented / Limitations
+## 14. Planned Features
 
-Items not yet supported in the current version:
-
-- **Control structures**: `WHILE`/`DO`
-- **Graphics**: `BOX`, `CIRCLE`, `FILLCIRCLE`, `SPRITE`, `SPRITEDEF`, `PCG`, `PALETTE`
-- **Sound**: `PLAY` (MML), `MUSIC`
-- **String escapes**: `\n` `\l` `\t` `\cN`, retro-style newline via `CHR$(12)`, the `\cN` escape for `COLOR`
-- **Other**: The PyxelBasic standard font is ASCII-only. Japanese display is not supported.
+- More graphics statements
+- Sound statements
+- Other features
 
 ---
 
