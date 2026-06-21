@@ -96,7 +96,7 @@ RUN
 | `samples/circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
 | `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
 | `samples/meteo.bas` | Dodge meteors falling from the top with the arrow keys (no collision detection) |
-| `samples/brickbreaker.bas` | Breakout |
+| `samples/brickbreaker.bas` | Block breaker |
 | `samples/fireworks.bas` | Fireworks display |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |
 
