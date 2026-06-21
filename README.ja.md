@@ -5,7 +5,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.2です。
+> 現在のバージョンはv0.1.3です。
 
 ## 特徴
 
@@ -89,8 +89,9 @@ RUN
 | `samples/circles.bas` | CIRCLE と比率で円・楕円を描く |
 | `samples/stick.bas` | 方向キーで点を動かす例（STICK 入力） |
 | `samples/meteo.bas` | 方向キーで上から降ってくる隕石をよける（当たり判定なし） |
+| `samples/brickbreaker.bas` | ブロック崩し |
 | `samples/fireworks.bas` | 花火を打ち上げる |
-| `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト（機能ごとに OK/NG を表示） |
+| `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト |
 
 読み込んで実行する例:
 
@@ -117,6 +118,10 @@ RUN
 PyxelBasic/
 ├── main.py                起動スクリプト
 ├── pyxelbasic/
+│   ├── __init__.py        パッケージ初期化（App を遅延 import し、import だけでは Pyxel を読まない）
+│   ├── version.py         バージョン文字列（Pyxel非依存／--version 用）
+│   ├── keywords.py        予約語の唯一の定義場所（命令・関数・演算子の表）
+│   ├── errors.py          エラーコードとメッセージの定義
 │   ├── interpreter.py     インタプリタコア（字句解析・式評価・実行エンジン／Pyxel非依存）
 │   ├── textscreen.py      テキスト画面モデル（仮想VRAM・折返し・スクロール／Pyxel非依存）
 │   ├── editor.py          フルスクリーン編集ロジック（Pyxel非依存）
@@ -128,7 +133,8 @@ PyxelBasic/
 ├── tests/
 │   └── test_core.py       コアのヘッドレステスト
 └── docs/
-    └── REFERENCE.md       完全な言語リファレンス
+    ├── REFERENCE.md       完全な言語リファレンス（英語）
+    └── REFERENCE.ja.md    完全な言語リファレンス（日本語）
 ```
 
 ## 開発・テスト

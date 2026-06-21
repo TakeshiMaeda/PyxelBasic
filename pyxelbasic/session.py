@@ -96,13 +96,10 @@ class SessionIO:
     are enqueued for the main thread; input reads consult the key state.
     """
 
-    def __init__(self, screen, gfx_queue, keys, surface=None):
+    def __init__(self, screen, gfx_queue, keys):
         self.screen = screen
         self.gfx = gfx_queue
         self.keys = keys
-        # The graphics surface is needed for pixel read-back (POINT). It may be
-        # given explicitly; otherwise a same-thread DirectGraphics exposes it.
-        self.surface = surface if surface is not None else getattr(gfx_queue, "surface", None)
 
     # --- text (direct to the VM-owned screen) ---
     def cls(self, mask=3):
@@ -154,12 +151,11 @@ class SessionIO:
         self.gfx.put(("tri", (x1, y1, x2, y2, x3, y3, c)))
 
     def point(self, x, y):
-        # Read back a pixel. Flush pending draws first so the surface is current
-        # (no-op in main-driven mode where draws apply immediately); then read.
-        self.gfx.wait_empty()
-        if self.surface is None:
-            return 0
-        return self.surface.pget(x, y)
+        # Read back a pixel via the graphics target. The Pyxel image is only
+        # touchable on the main thread, so in threaded mode this round-trips
+        # through the command queue (serviced during drain); in main-driven mode
+        # it reads the surface directly. Either way prior draws are applied first.
+        return self.gfx.pget(x, y)
 
     # --- input (read the derived key state) ---
     def inkey(self):
@@ -176,14 +172,14 @@ class Session:
     def __init__(self, cols, rows, gfx_queue, input_ring, workdir=None,
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
-                 debug_throttle=False, vsync_enabled=False, gfx_surface=None):
+                 debug_throttle=False, vsync_enabled=False):
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
         self.keys = KeyState()
         self.gfx_queue = gfx_queue
         self.input_ring = input_ring
-        self.io = SessionIO(self.screen, gfx_queue, self.keys, gfx_surface)
+        self.io = SessionIO(self.screen, gfx_queue, self.keys)
         # vsync_enabled is True only in the main-driven execution mode, where the
         # interpreter honours frame-break/VSYNC; the threaded mode leaves it off.
         self.interp = Interpreter(self.io, vsync_enabled=vsync_enabled)

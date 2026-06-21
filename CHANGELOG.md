@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+- Added the `brickbreaker.bas` sample
+- Fixed a crash in `POINT` in thread mode
+
 ## 0.1.2
 - Added an argument to `CLS`
 - Added line-numberless range forms to `LIST`: `LIST -100`, `LIST 200-`

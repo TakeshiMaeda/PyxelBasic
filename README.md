@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.2.
+> This is version 0.1.3.
 
 ## Features
 
@@ -96,6 +96,7 @@ RUN
 | `samples/circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
 | `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
 | `samples/meteo.bas` | Dodge meteors falling from the top with the arrow keys (no collision detection) |
+| `samples/brickbreaker.bas` | Breakout |
 | `samples/fireworks.bas` | Fireworks display |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |
 
@@ -124,6 +125,10 @@ Main elements:
 PyxelBasic/
 ├── main.py                launcher
 ├── pyxelbasic/
+│   ├── __init__.py        package init (lazily imports App; importing alone does not load Pyxel)
+│   ├── version.py         version string (Pyxel-independent; for --version)
+│   ├── keywords.py        single source of truth for reserved words (statement/function/operator tables)
+│   ├── errors.py          error codes and message definitions
 │   ├── interpreter.py     interpreter core (lexer, expression evaluator, execution engine; Pyxel-independent)
 │   ├── textscreen.py      text screen model (virtual VRAM, wrapping, scrolling; Pyxel-independent)
 │   ├── editor.py          full-screen editing logic (Pyxel-independent)
@@ -135,7 +140,8 @@ PyxelBasic/
 ├── tests/
 │   └── test_core.py       headless tests for the core
 └── docs/
-    └── REFERENCE.md       complete language reference
+    ├── REFERENCE.md       complete language reference (English)
+    └── REFERENCE.ja.md    complete language reference (Japanese)
 ```
 
 ## Development & Tests

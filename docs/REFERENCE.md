@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.2
+- Target version: v0.1.3
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -717,20 +717,3 @@ Colors are specified by Pyxel's standard 16-color palette (numbers 0 to 15). Rep
 | 7 | White | 15 | Peach |
 
 > The actual colors follow the version and palette settings of the Pyxel you are using.
-
----
-
-## Appendix: Sample Programs
-
-The `samples/` directory includes the following.
-
-| File | Description |
-|---|---|
-| `hello.bas` | HELLO WORLD |
-| `count.bas` | Using FOR/NEXT and expressions |
-| `graph.bas` | Graphics with lines and points |
-| `circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
-| `stick.bas` | Move a dot with the arrow keys (STICK input) |
-| `meteo.bas` | Dodge falling meteors (no collision detection) |
-| `fireworks.bas` | Fireworks display |
-| `alltest.bas` | Self-test of all statements and functions |

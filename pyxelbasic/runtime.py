@@ -176,6 +176,23 @@ class CommandQueue:
             self._dq.append(cmd)
             self._cond.notify_all()
 
+    def pget(self, x, y):
+        """VM thread: read a pixel through the queue and block for the result.
+
+        The Pyxel image is owned by (and only touchable on) the main thread, so
+        the read is enqueued like a draw command and serviced during drain(). A
+        holder slot carries the value back; None means not serviced yet (a real
+        colour can be 0). Returns 0 if the queue is stopped before servicing."""
+        holder = [None]
+        with self._cond:
+            if self._stop:
+                return 0
+            self._dq.append(("__pget__", (x, y, holder)))
+            self._cond.notify_all()
+            while holder[0] is None and not self._stop:
+                self._cond.wait()
+        return holder[0] if holder[0] is not None else 0
+
     def drain(self, console):
         """Main thread: apply every queued command to the console.
 
@@ -185,7 +202,11 @@ class CommandQueue:
         with self._cond:
             while self._dq:
                 name, args = self._dq.popleft()
-                getattr(console, name)(*args)
+                if name == "__pget__":
+                    x, y, holder = args
+                    holder[0] = console.pget(x, y)
+                else:
+                    getattr(console, name)(*args)
             self._cond.notify_all()
 
     def wait_empty(self):
@@ -232,6 +253,10 @@ class DirectGraphics:
     def put(self, cmd):
         name, args = cmd
         getattr(self.surface, name)(*args)
+
+    def pget(self, x, y):
+        # VM runs on the main thread here, so reading the surface is immediate.
+        return self.surface.pget(x, y)
 
     def drain(self, console=None):
         pass

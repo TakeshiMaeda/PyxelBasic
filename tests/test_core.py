@@ -7,6 +7,8 @@ Run:  python tests/test_core.py
 
 import os
 import sys
+import threading
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -512,6 +514,37 @@ def test_point():
     check("point reads empty pixel", io.out[1], "0")
 
 
+def test_command_queue_pget():
+    # In threaded mode POINT cannot touch the (main-thread-only) Pyxel image, so
+    # the read round-trips through the queue: the VM thread enqueues a request
+    # and blocks until the main thread services it during drain().
+    class DummySurface:
+        def pget(self, x, y):
+            return 42 if (x, y) == (5, 7) else 0
+
+    q = CommandQueue()
+    surf = DummySurface()
+    result = {}
+
+    def reader():
+        result["v"] = q.pget(5, 7)
+
+    t = threading.Thread(target=reader)
+    t.start()
+    # Act as the main thread: drain until the blocked reader gets its value.
+    for _ in range(1000):
+        q.drain(surf)
+        if not t.is_alive():
+            break
+        time.sleep(0.001)
+    t.join(timeout=1.0)
+    check("queue pget round-trip", result.get("v"), 42)
+
+    # Once stopped, a pget returns 0 immediately without needing a drain.
+    q.stop()
+    check("queue pget after stop", q.pget(9, 9), 0)
+
+
 def test_vsync_noop():
     # VSYNC is a no-op now (frame pacing is the VM throttle). Only VSYNC LIST
     # still prints the historical frame-break list; every other form runs
@@ -889,6 +922,7 @@ def main():
         test_input, test_logical, test_graphics,
         test_cls_args, test_list_range, test_lineb,
         test_circle_full, test_circle_ratio, test_circle_arc, test_point,
+        test_command_queue_pget,
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
         test_session_run_frame_yields, test_direct_graphics_immediate,

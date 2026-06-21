@@ -64,8 +64,7 @@ class App:
             cycle_steps=cycle_steps if cycle_steps is not None else CYCLE_STEPS,
             cycle_period=cycle_period if cycle_period is not None else CYCLE_PERIOD,
             debug_throttle=debug_throttle,
-            vsync_enabled=(exec_mode == "main"),
-            gfx_surface=self.gfx_surface)
+            vsync_enabled=(exec_mode == "main"))
 
         self.confirm_quit = False
         self.show_fps = show_fps
