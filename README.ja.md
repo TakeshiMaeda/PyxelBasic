@@ -1,7 +1,7 @@
 # PyxelBasic
 ![GitHub stars](https://img.shields.io/github/stars/TakeshiMaeda/PyxelBasic?style=social)
 ![License](https://img.shields.io/github/license/TakeshiMaeda/PyxelBasic)
-![Python](https://img.shields.io/badge/python-3.1)
+
 
 [English](README.md) | 日本語
 
