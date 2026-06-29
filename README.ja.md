@@ -8,7 +8,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.3です。
+> 現在のバージョンはv0.1.4です。
 
 ## 特徴
 
@@ -18,6 +18,8 @@
 - 数値・文字列の変数と多次元配列
 - 文字列・数学・乱数・入力の組み込み関数
 - 点・線のグラフィック描画とテキスト画面
+- スプライト：グラフィック面とテキスト面の間に 8x8 / 16x16 のスプライト面（`SET SPRITE` / `PUT SPRITE`）
+- サウンド：Pyxel の 4 チャンネル MML 再生に対応。ループ BGM と効果音の割り込みに対応（`PLAY`）
 - BASICの駆動方式、Pyxelメインループ／別スレッドを起動引数で切替
 - プログラムのファイル保存・読み込み（`SAVE` / `LOAD`）
 - Pyxel上で動作し、Pyxelの機能を利用可能予定
@@ -91,8 +93,11 @@ RUN
 | `samples/graph.bas` | 線・点によるグラフィック描画 |
 | `samples/circles.bas` | CIRCLE と比率で円・楕円を描く |
 | `samples/stick.bas` | 方向キーで点を動かす例（STICK 入力） |
+| `samples/sprite.bas` | 方向キーでアニメーションするスプライトを動かす（SET/PUT SPRITE） |
+| `samples/play.bas` | ループ BGM と効果音の割り込み（PLAY） |
 | `samples/meteo.bas` | 方向キーで上から降ってくる隕石をよける（当たり判定なし） |
 | `samples/brickbreaker.bas` | ブロック崩し |
+| `samples/jumpman.bas` | 重力とジャンプで地形を登るアクション（SET/PUT SPRITE・PLAY） |
 | `samples/fireworks.bas` | 花火を打ち上げる |
 | `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト |
 
@@ -111,8 +116,8 @@ RUN
 
 主な要素:
 
-- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `RANDOMIZE` `VSYNC` `END`/`STOP`
-- 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT`
+- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - 演算子: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
 ## プロジェクト構成
@@ -131,6 +136,7 @@ PyxelBasic/
 │   ├── session.py         BASIC VM セッション（別スレッドで編集／実行／入力を駆動／Pyxel非依存）
 │   ├── runtime.py         スレッド間プラミング（入力イベントリング・描画キュー／Pyxel非依存）
 │   ├── console.py         Pyxel 描画フロントエンド（テキスト／グラフィックのレンダラ）
+│   ├── audio.py           Pyxel 音声フロントエンド（PLAY / MML・Sound を都度生成）
 │   └── app.py             Pyxel 端末（入力取得・描画・メインループ）
 ├── samples/               サンプルプログラム（.bas）
 ├── tests/

@@ -46,6 +46,10 @@ THROTTLE_DELAY = 0.0
 # drains them. Bounded; when full the newest event is dropped (typeahead-full).
 INPUT_RING_CAPACITY = 256
 
+# Sentinel for CommandQueue.call(): distinguishes "not serviced yet" from a real
+# None result (a call such as a successful play legitimately returns None).
+_PENDING = object()
+
 # Event kinds. value = the character (CHAR) or an abstract key id (the rest).
 EV_CHAR = "char"     # a typed printable character
 EV_DOWN = "down"     # a key was pressed this frame (edge)
@@ -193,6 +197,23 @@ class CommandQueue:
                 self._cond.wait()
         return holder[0] if holder[0] is not None else 0
 
+    def call(self, name, args=()):
+        """VM thread: invoke a method on the drain target and block for its result.
+
+        Like pget but generic: enqueues a request that drain() services on the
+        main thread by calling target.<name>(*args), and returns the value. Used
+        by the audio sink (e.g. play/playing) so Pyxel audio calls happen on the
+        main thread. Returns None if the queue is stopped before servicing."""
+        holder = [_PENDING]
+        with self._cond:
+            if self._stop:
+                return None
+            self._dq.append(("__call__", (name, args, holder)))
+            self._cond.notify_all()
+            while holder[0] is _PENDING and not self._stop:
+                self._cond.wait()
+        return None if holder[0] is _PENDING else holder[0]
+
     def drain(self, console):
         """Main thread: apply every queued command to the console.
 
@@ -205,6 +226,9 @@ class CommandQueue:
                 if name == "__pget__":
                     x, y, holder = args
                     holder[0] = console.pget(x, y)
+                elif name == "__call__":
+                    fname, fargs, holder = args
+                    holder[0] = getattr(console, fname)(*fargs)
                 else:
                     getattr(console, name)(*args)
             self._cond.notify_all()
@@ -235,6 +259,75 @@ class CommandQueue:
             self._cond.notify_all()
 
 
+# --- Sprites (display table + pattern-sheet geometry) ---
+# The pattern pixels live in a Pyxel texture on the front end (blt needs an
+# Image as its source), so only the display table and the pure pattern-sheet
+# geometry live here (Pyxel-independent, headless-testable). The VM updates the
+# table; the front end reads a snapshot of it each frame to compose the sprite
+# plane (the same "VM writes, front end reads a snapshot" shape as the screen).
+
+SPRITE_SHEET = 256          # pattern sheet is SPRITE_SHEET x SPRITE_SHEET pixels
+SPRITE_COUNT = 1024         # number of 8x8 patterns the sheet holds (32x32 cells)
+
+
+def sprite8_pixel(n):
+    """Top-left pixel (px, py) of 8x8 pattern number n on the 256x256 sheet.
+
+    The sheet is grouped into 16x16 blocks (a 2x2 of 8x8 cells). Four 8x8
+    patterns form one block: local 0=top-left, 1=top-right, 2=bottom-left,
+    3=bottom-right. Blocks are numbered row-major across the 16x16 grid of
+    blocks, giving the sheet order  0,1,4,5,...  /  2,3,6,7,...
+    """
+    block, local = divmod(n, 4)
+    bx, by = block % 16, block // 16
+    cx = bx * 2 + (1 if local in (1, 3) else 0)
+    cy = by * 2 + (1 if local in (2, 3) else 0)
+    return cx * 8, cy * 8
+
+
+def sprite16_pixel(m):
+    """Top-left pixel (px, py) of 16x16 sprite number m on the 256x256 sheet.
+
+    A 16x16 sprite is the whole block of four 8x8 patterns m*4..m*4+3, so it
+    sits at block (m%16, m//16) -> the same origin as sprite8_pixel(m*4)."""
+    return (m % 16) * 16, (m // 16) * 16
+
+
+class SpriteTable:
+    """Display table for sprites: 1024 entries the VM writes and the front end
+    reads (via snapshot) each frame.
+
+    Each entry is [enabled, x, y, no, size, colkey]. All entries start disabled
+    with zeroed fields. A lock guards the cross-thread access in threaded mode;
+    in main-driven mode the same thread writes and reads, so it is uncontended.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._entries = [[False, 0, 0, 0, 0, -1] for _ in range(SPRITE_COUNT)]
+
+    def put(self, sid, x, y, no, size, colkey):
+        with self._lock:
+            self._entries[sid] = [True, x, y, no, size, colkey]
+
+    def off(self, sid):
+        with self._lock:
+            self._entries[sid][0] = False
+
+    def clear(self):
+        with self._lock:
+            for e in self._entries:
+                e[0] = False
+                e[1] = e[2] = e[3] = e[4] = 0
+                e[5] = -1
+
+    def snapshot(self):
+        """Return the enabled entries as (id, x, y, no, size, colkey) tuples."""
+        with self._lock:
+            return [(i, e[1], e[2], e[3], e[4], e[5])
+                    for i, e in enumerate(self._entries) if e[0]]
+
+
 class DirectGraphics:
     """Same-thread graphics target for the main-driven execution mode.
 
@@ -257,6 +350,10 @@ class DirectGraphics:
     def pget(self, x, y):
         # VM runs on the main thread here, so reading the surface is immediate.
         return self.surface.pget(x, y)
+
+    def call(self, name, args=()):
+        # Same thread: dispatch immediately and return the result.
+        return getattr(self.surface, name)(*args)
 
     def drain(self, console=None):
         pass

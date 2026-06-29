@@ -19,7 +19,8 @@ from pyxelbasic.errors import Err  # noqa: E402
 from pyxelbasic.keywords import STATEMENTS, FUNCTIONS  # noqa: E402
 from pyxelbasic.runtime import (  # noqa: E402
     InputState, CommandQueue, DirectGraphics,
-    InputRing, KeyState, EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
+    InputRing, KeyState, SpriteTable, sprite8_pixel, sprite16_pixel,
+    EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
 from pyxelbasic.keywords import (  # noqa: E402
     KEY_UP, KEY_LEFT, KEY_BTN0, KEY_BTN1,
@@ -38,6 +39,12 @@ class MockIO:
         self.gfx = []
         self.pixels = {}      # (x, y) -> color, fed by pset; read back by point
         self.inputs = list(inputs or [])
+        self.sprite_sets = []   # (no, colors) recorded by set_sprite
+        self.sprite_puts = []   # (id, x, y, no, size, colkey) recorded by put_sprite
+        self.sprite_offs = []   # id recorded by put_sprite_off
+        self.play_calls = []    # audio calls recorded by play_channels/play_ch/play_stop
+        self._playing = set()   # channels currently "playing" (for the PLAY() function)
+        self.invalid_mmls = set()  # MMLs to treat as invalid (return them as the error)
 
     def print_text(self, text):
         self._cur += text
@@ -83,6 +90,43 @@ class MockIO:
     def point(self, x, y):
         return self.pixels.get((x, y), 0)
 
+    def set_sprite(self, no, colors):
+        self.sprite_sets.append((no, colors))
+
+    def put_sprite(self, sid, x, y, no, size, colkey):
+        self.sprite_puts.append((sid, x, y, no, size, colkey))
+
+    def put_sprite_off(self, sid):
+        self.sprite_offs.append(sid)
+
+    def play_channels(self, mmls, loop):
+        self.play_calls.append(("channels", list(mmls), loop))
+        for ch in range(4):
+            if ch < len(mmls) and mmls[ch]:
+                if mmls[ch] in self.invalid_mmls:
+                    return mmls[ch]
+                self._playing.add(ch)
+        return None
+
+    def play_ch(self, ch, mml, loop):
+        self.play_calls.append(("ch", ch, mml, loop))
+        if mml:
+            if mml in self.invalid_mmls:
+                return mml
+            self._playing.add(ch)
+        return None
+
+    def play_stop(self, channels):
+        self.play_calls.append(("stop", list(channels)))
+        if channels:
+            for ch in channels:
+                self._playing.discard(ch)
+        else:
+            self._playing.clear()
+
+    def playing(self, ch):
+        return 1 if ch in self._playing else 0
+
     def inkey(self):
         return ""
 
@@ -93,8 +137,9 @@ class MockIO:
         return 0
 
 
-def run_program(lines, inputs=None, max_steps=100000):
-    io = MockIO(inputs)
+def run_program(lines, inputs=None, max_steps=100000, io=None):
+    if io is None:
+        io = MockIO(inputs)
     interp = Interpreter(io)
     for ln, src in lines:
         interp.store_line(ln, src)
@@ -313,6 +358,76 @@ def test_string_funcs():
     check("CHR$/ASC", io.out[4], "A65")
 
 
+def test_hex():
+    # &H literals (input), HEX$ (output), and VAL parsing of &H strings.
+    io, _ = run_program([
+        (10, 'A = &HFF'),
+        (20, 'PRINT A'),
+        (30, 'PRINT &H10; " "; &HaB'),     # case-insensitive digits
+        (40, 'PRINT HEX$(255); " "; HEX$(16)'),
+        (50, 'PRINT HEX$(-255)'),           # negative keeps a sign
+        (60, 'PRINT VAL("&HFF"); " "; VAL("&hff")'),
+        (70, 'PRINT VAL("&H"); " "; VAL("45")'),  # bad hex -> 0, decimal intact
+    ])
+    check("&H literal", io.out[0], "255")
+    check("&H literal case", io.out[1], "16 171")
+    check("HEX$", io.out[2], "FF 10")
+    check("HEX$ negative", io.out[3], "-FF")
+    check("VAL &H", io.out[4], "255 255")
+    check("VAL bad hex / decimal", io.out[5], "0 45")
+
+
+def test_hex_literal_error():
+    # &H with no hex digits is a tokenizer error.
+    code = None
+    try:
+        tokenize('A = &H')
+    except BasicError as e:
+        code = int(e.code)
+    check("&H without digits raises 122", code, int(Err.INVALID_HEX_LITERAL))
+
+
+def test_hex_renum_roundtrip():
+    # A hex literal on a GOTO/GOSUB/THEN line is rewritten via detokenize during
+    # RENUM; it must round-trip back to &H form (not collapse to decimal), while
+    # the referenced line number is still renumbered.
+    interp = Interpreter(MockIO())
+    interp.store_line(10, 'IF A = &HFF THEN 100')
+    interp.store_line(100, 'PRINT &H10')
+    interp.renum(200, 5)
+    lines = dict(interp.list_lines())
+    check("RENUM keeps &H on THEN line", lines[200], "IF A = &HFF THEN 205")
+    check("RENUM keeps &H on plain line", lines[205], "PRINT &H10")
+
+
+def test_arg_count_error():
+    # Calling a function with the wrong number of arguments is a BasicError
+    # (code 123), not a Python crash. This covers too few (including none),
+    # too many, and the single-argument math path (MATH1). The check happens in
+    # parse_function before the handler runs, so handlers never see a short list.
+    def err_code(expr):
+        # A runtime error is caught in step() and printed as "?ERROR <code> ...";
+        # pull the code back out of that line.
+        io, _ = run_program([(10, 'PRINT ' + expr)])
+        for line in io.out:
+            if line.startswith("?ERROR "):
+                return int(line.split()[1])
+        return None
+
+    want = int(Err.WRONG_ARG_COUNT)
+    check("HEX$() no arg", err_code('HEX$()'), want)
+    check("VAL() no arg", err_code('VAL()'), want)
+    check("LEN() no arg", err_code('LEN()'), want)
+    check("MID$ too few", err_code('MID$("AB")'), want)
+    check("MID$ too many", err_code('MID$("A",1,2,3)'), want)
+    check("POINT too few", err_code('POINT(1)'), want)
+    check("SIN() math no arg", err_code('SIN()'), want)
+    check("HEX$ too many", err_code('HEX$(255,1)'), want)
+    # Valid call counts still evaluate (no false positives).
+    io, _ = run_program([(10, 'PRINT HEX$(255); MID$("ABCDE",2,2)')])
+    check("valid arg counts still work", io.out[0], "FFBC")
+
+
 def test_array():
     io, _ = run_program([
         (10, 'DIM A(5)'),
@@ -455,6 +570,17 @@ def test_cls_args():
     ])
     masks = [s for s in io.out if s.startswith("<CLS")]
     check("cls masks", masks, ["<CLS 1>", "<CLS 2>", "<CLS 3>", "<CLS 3>"])
+
+
+def test_cls_mask_range():
+    # The mask is used as bit flags; a value outside 1..3 used to silently clear
+    # an unexpected subset (or nothing) with no error. Now it is rejected. 0 is
+    # rejected too, since it would read like a bare CLS but do nothing.
+    check("cls 1 ok", _err_code([(10, 'CLS 1')]), None)
+    check("cls 3 ok", _err_code([(10, 'CLS 3')]), None)
+    check("cls 0 errors", _err_code([(10, 'CLS 0')]), int(Err.INVALID_CLS_MASK))
+    check("cls 4 errors", _err_code([(10, 'CLS 4')]), int(Err.INVALID_CLS_MASK))
+    check("cls -1 errors", _err_code([(10, 'CLS -1')]), int(Err.INVALID_CLS_MASK))
 
 
 def test_list_range():
@@ -621,6 +747,22 @@ def test_session_run_frame_yields():
     check("next frame advances", s.interp.cur_line, 20)
     s.run_frame(STEPS_PER_FRAME)   # runs line 30 (END) -> back to edit mode
     check("session ends", s.mode, "EDIT")
+
+
+def test_break_stops_sound():
+    # Ctrl+C (request_break) must abort the run AND stop all sound channels.
+    rec = _Recorder()
+    s = Session(64, 42, DirectGraphics(_Recorder()), InputRing(),
+                audio=DirectGraphics(rec))
+    for ln, src in [(10, 'PRINT "A"'), (20, 'GOTO 10')]:
+        s.interp.store_line(ln, src)
+    s._start_run()
+    s.run_frame(STEPS_PER_FRAME)     # run the loop for a frame
+    check("running before break", s.mode, "RUN")
+    s.request_break()
+    s.run_frame(STEPS_PER_FRAME)     # next frame processes the break
+    check("break returns to edit", s.mode, "EDIT")
+    check("break issued play_stop", ("play_stop", []) in rec.calls, True)
 
 
 def test_direct_graphics_immediate():
@@ -861,6 +1003,253 @@ def test_editor_reflow_wrap():
     check("editor reflow on insert", ts.get_logical_text(0)[0], "XABCDEF")
 
 
+def _err_code(lines):
+    """Run a program and return the code of the first ?ERROR line (or None)."""
+    io, _ = run_program(lines)
+    for line in io.out:
+        if line.startswith("?ERROR "):
+            return int(line.split()[1])
+    return None
+
+
+def test_set_sprite():
+    # 64 hex chars define one 8x8 pattern; each char is one pixel colour.
+    io, _ = run_program([(10, 'SET SPRITE 0, "' + "0123456789ABCDEF" * 4 + '"')])
+    no, colors = io.sprite_sets[0]
+    check("set_sprite no/len", (no, len(colors)), (0, 64))
+    check("set_sprite decode", colors[:16],
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    # A short string is padded with '0' up to a full 64-char pattern.
+    io, _ = run_program([(10, 'SET SPRITE 5, "FF"')])
+    no, colors = io.sprite_sets[0]
+    check("set_sprite short padded", (no, len(colors), colors[:3]), (5, 64, [15, 15, 0]))
+    # 128 chars store two consecutive 8x8 patterns in one call.
+    io, _ = run_program([(10, 'SET SPRITE 0, "' + "A" * 128 + '"')])
+    check("set_sprite two patterns", (io.sprite_sets[0][0], len(io.sprite_sets[0][1])), (0, 128))
+    # Lowercase hex digits are allowed (string literals keep their case).
+    io, _ = run_program([(10, 'SET SPRITE 0, "abcdef00"')])
+    check("set_sprite lowercase", io.sprite_sets[0][1][:6], [10, 11, 12, 13, 14, 15])
+
+
+def test_set_sprite_errors():
+    check("set invalid char", _err_code([(10, 'SET SPRITE 0, "XYZ"')]),
+          int(Err.INVALID_SPRITE_DATA))
+    check("set no out of range", _err_code([(10, 'SET SPRITE 1024, "FF"')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+    # Two patterns starting at 1023 spill past the last pattern (1023).
+    check("set overflow", _err_code([(10, 'SET SPRITE 1023, "' + "A" * 128 + '"')]),
+          int(Err.SPRITE_PATTERN_OVERFLOW))
+
+
+def test_put_sprite():
+    io, _ = run_program([
+        (10, 'PUT SPRITE 3, (40, 50), 7, 0'),
+        (20, 'PUT SPRITE 4, (10, 20), 2, 1, 5'),
+    ])
+    check("put default colkey -1", io.sprite_puts[0], (3, 40, 50, 7, 0, -1))
+    check("put with colkey", io.sprite_puts[1], (4, 10, 20, 2, 1, 5))
+    # no = 255 is valid for a 16x16 sprite (max 255).
+    io, _ = run_program([(10, 'PUT SPRITE 0, (0, 0), 255, 1')])
+    check("put no 255 ok for 16x16", io.sprite_puts[0], (0, 0, 0, 255, 1, -1))
+
+
+def test_put_sprite_off():
+    io, _ = run_program([(10, 'PUT SPRITE 9, OFF')])
+    check("put off records id", io.sprite_offs, [9])
+    check("put off extra args error", _err_code([(10, 'PUT SPRITE 9, OFF, 1')]),
+          int(Err.INVALID_SPRITE_SYNTAX))
+
+
+def test_put_sprite_errors():
+    check("put id oob", _err_code([(10, 'PUT SPRITE 1024, (0, 0), 0, 0')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+    check("put size oob", _err_code([(10, 'PUT SPRITE 0, (0, 0), 0, 2')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+    check("put no oob 8x8", _err_code([(10, 'PUT SPRITE 0, (0, 0), 1024, 0')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+    check("put no oob 16x16", _err_code([(10, 'PUT SPRITE 0, (0, 0), 256, 1')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+    check("put colkey oob", _err_code([(10, 'PUT SPRITE 0, (0, 0), 0, 0, 16')]),
+          int(Err.SPRITE_OUT_OF_RANGE))
+
+
+def test_sprite_framebreak():
+    # main-driven mode: PUT SPRITE is a frame-break (updates the display table
+    # each game-loop frame); SET SPRITE is not (it is pattern setup).
+    io = MockIO()
+    interp = Interpreter(io, vsync_enabled=True)
+    for ln, src in [(10, 'PUT SPRITE 0, (0, 0), 0, 0'),
+                    (20, 'SET SPRITE 0, "FF"'), (30, 'END')]:
+        interp.store_line(ln, src)
+    interp.prepare_run()
+    interp.step()
+    check("PUT SPRITE yields frame", interp.yield_frame, True)
+    interp.yield_frame = False
+    interp.step()
+    check("SET SPRITE does not yield", interp.yield_frame, False)
+
+
+def test_sprite_table():
+    t = SpriteTable()
+    check("table empty snapshot", t.snapshot(), [])
+    t.put(2, 10, 20, 5, 1, 7)
+    t.put(0, 1, 2, 3, 0, -1)
+    snap = t.snapshot()
+    # snapshot() is ascending by id; the renderer draws it reversed so the
+    # lowest id (0) lands frontmost.
+    check("table snapshot ascending by id", [e[0] for e in snap], [0, 2])
+    check("table entry fields", snap[1], (2, 10, 20, 5, 1, 7))
+    t.off(0)
+    check("table off disables", [e[0] for e in t.snapshot()], [2])
+    t.clear()
+    check("table clear empties", t.snapshot(), [])
+
+
+def test_sprite_geometry():
+    # 8x8 sheet order: 0,1 / 2,3 within a block, blocks row-major (0,1,4,5..).
+    check("8x8 #0..4", [sprite8_pixel(n) for n in range(5)],
+          [(0, 0), (8, 0), (0, 8), (8, 8), (16, 0)])
+    check("8x8 #1023", sprite8_pixel(1023), (248, 248))
+    check("16x16 #0/1/16/255",
+          [sprite16_pixel(m) for m in (0, 1, 16, 255)],
+          [(0, 0), (16, 0), (0, 16), (240, 240)])
+    # A 16x16 sprite m aligns with its top-left 8x8 pattern m*4.
+    check("16x16 aligns 8x8*4", sprite16_pixel(5), sprite8_pixel(20))
+
+
+def test_play_channels():
+    io, _ = run_program([
+        (10, 'PLAY "a", "b"'),
+        (20, 'PLAY "", "b"'),
+        (30, 'PLAY , "b"'),
+        (40, 'PLAY LOOP "a"'),
+    ])
+    check("play positional", io.play_calls[0], ("channels", ["a", "b"], False))
+    check("play empty-string slot", io.play_calls[1], ("channels", ["", "b"], False))
+    check("play omitted slot", io.play_calls[2], ("channels", [None, "b"], False))
+    check("play loop flag", io.play_calls[3], ("channels", ["a"], True))
+
+
+def test_play_ch():
+    io, _ = run_program([
+        (10, 'PLAY CH 2, "x"'),
+        (20, 'PLAY LOOP CH 1, "y"'),
+    ])
+    check("play ch", io.play_calls[0], ("ch", 2, "x", False))
+    check("play loop ch", io.play_calls[1], ("ch", 1, "y", True))
+
+
+def test_play_stop():
+    io, _ = run_program([
+        (10, 'PLAY STOP'),
+        (20, 'PLAY STOP 1'),
+        (30, 'PLAY STOP 0, 1'),
+    ])
+    check("play stop all", io.play_calls[0], ("stop", []))
+    check("play stop one", io.play_calls[1], ("stop", [1]))
+    check("play stop many", io.play_calls[2], ("stop", [0, 1]))
+
+
+def test_play_function():
+    io, _ = run_program([
+        (10, 'PLAY CH 0, "a"'),
+        (20, 'PRINT PLAY(0); PLAY(3)'),
+        (30, 'PLAY STOP 0'),
+        (40, 'PRINT PLAY(0)'),
+    ])
+    check("play() reports playing", io.out[0], "10")
+    check("play() reports stopped", io.out[1], "0")
+
+
+def test_play_invalid_mml():
+    io = MockIO()
+    io.invalid_mmls = {"zzz"}
+    io2, _ = run_program([(10, 'PLAY "zzz"')], io=io)
+    code = next((int(s.split()[1]) for s in io2.out if s.startswith("?ERROR ")), None)
+    check("invalid mml raises 409", code, int(Err.INVALID_MML))
+
+
+def test_play_errors():
+    check("play ch oob", _err_code([(10, 'PLAY CH 4, "x"')]),
+          int(Err.PLAY_CHANNEL_OUT_OF_RANGE))
+    check("play stop ch oob", _err_code([(10, 'PLAY STOP 5')]),
+          int(Err.PLAY_CHANNEL_OUT_OF_RANGE))
+    check("play() ch oob", _err_code([(10, 'PRINT PLAY(9)')]),
+          int(Err.PLAY_CHANNEL_OUT_OF_RANGE))
+    check("play ch no mml", _err_code([(10, 'PLAY CH 0')]),
+          int(Err.INVALID_PLAY_SYNTAX))
+    check("play too many slots", _err_code([(10, 'PLAY "a","b","c","d","e"')]),
+          int(Err.INVALID_PLAY_SYNTAX))
+
+
+def test_exception_safety_net():
+    # An unexpected Python-level error (e.g. a non-numeric where a number is
+    # required) must be reported as a BASIC error, not crash the interpreter.
+    # This covers the new sprite/sound statements and pre-existing ones alike.
+    cases = [
+        'SET SPRITE "ffffffff"',     # number omitted -> int("ffffffff")
+        'PUT SPRITE "x", (0,0), 0, 0',
+        'PLAY CH "x", "m"',
+        'PLAY STOP "x"',
+        'LOCATE "a", 1',
+    ]
+    for src in cases:
+        io, interp = run_program([(10, src)])
+        check("safety net reports: " + src,
+              any(s.startswith("?ERROR") for s in io.out), True)
+        check("safety net drops to edit: " + src, interp.state, "EDIT")
+
+
+def test_audio_resume_gating():
+    # PyxelBasicAudio decides the resume flag from a per-channel "active" flag so
+    # a one-shot after PLAY STOP does not resurrect the stopped sound, while a
+    # one-shot over a still-playing sound does resume it. Drive it with a fake
+    # pyxel and assert the (ch, loop, resume) values reaching pyxel.play.
+    import pyxelbasic.audio as audiomod
+
+    class _FakeSound:
+        def mml(self, s):
+            pass
+
+    class _FakePyxel:
+        def __init__(self):
+            self.calls = []
+
+        def Sound(self):
+            return _FakeSound()
+
+        def play(self, ch, snd, loop, resume):
+            self.calls.append((ch, loop, resume))
+
+        def stop(self, ch):
+            self.calls.append(("stop", ch))
+
+        def play_pos(self, ch):
+            return None
+
+    fake = _FakePyxel()
+    orig = audiomod.pyxel
+    audiomod.pyxel = fake
+    try:
+        a = audiomod.PyxelBasicAudio()
+        a.play_ch(0, "C")                       # fresh channel -> resume False
+        a.play_ch(0, "D")                       # over active   -> resume True
+        a.play_stop([0])                        # stop          -> active cleared
+        a.play_ch(0, "E")                       # after stop    -> resume False
+        a.play_channels(["", "B"], loop=True)   # ch1 loop      -> resume False
+        a.play_ch(1, "C")                       # ch1 active    -> resume True
+    finally:
+        audiomod.pyxel = orig
+    check("audio resume gating", fake.calls, [
+        (0, False, False),
+        (0, False, True),
+        ("stop", 0),
+        (0, False, False),
+        (1, True, False),
+        (1, False, True),
+    ])
+
+
 def test_dispatch_registration():
     # STATEMENTS / FUNCTIONS are derived in keywords.py from the handler maps
     # (STATEMENT_HANDLERS / FUNCTION_HANDLERS / MATH1). Pin their contents so a
@@ -871,14 +1260,14 @@ def test_dispatch_registration():
         "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
         "PSET", "LINE", "LINEB", "LINEBF", "CIRCLE", "CIRCLEBF",
         "END", "STOP", "DATA", "READ", "RESTORE",
-        "RANDOMIZE", "VSYNC",
+        "RANDOMIZE", "VSYNC", "SET", "PUT", "PLAY",
     }
     expected_functions = {
-        "LEN", "LEFT$", "RIGHT$", "MID$", "CHR$", "ASC", "STR$", "VAL",
+        "LEN", "LEFT$", "RIGHT$", "MID$", "CHR$", "ASC", "STR$", "HEX$", "VAL",
         "ABS", "SGN", "INT", "FIX", "ROUND",
         "SIN", "COS", "TAN", "ATN", "RAD", "DEG",
         "EXP", "LOG", "LOG10", "SQR",
-        "RND", "INKEY$", "STICK", "BUTTON", "POINT",
+        "RND", "INKEY$", "STICK", "BUTTON", "POINT", "PLAY",
     }
     check("dispatch statements set", STATEMENTS, expected_statements)
     check("dispatch functions set", FUNCTIONS, expected_functions)
@@ -914,18 +1303,26 @@ def main():
         test_multi_statement_data_unaffected,
         test_direct_multi_statement, test_direct_if_then_multi,
         test_direct_for_next_no_loop,
-        test_string_funcs,
+        test_string_funcs, test_hex, test_hex_literal_error,
+        test_hex_renum_roundtrip, test_arg_count_error,
         test_array, test_array_2d, test_gosub, test_data_read,
         test_data_signed_values, test_data_unquoted_is_error,
         test_read_into_array,
         test_restore_line, test_restore_line_not_data,
         test_input, test_logical, test_graphics,
-        test_cls_args, test_list_range, test_lineb,
+        test_cls_args, test_cls_mask_range, test_list_range, test_lineb,
         test_circle_full, test_circle_ratio, test_circle_arc, test_point,
+        test_set_sprite, test_set_sprite_errors,
+        test_put_sprite, test_put_sprite_off, test_put_sprite_errors,
+        test_sprite_framebreak, test_sprite_table, test_sprite_geometry,
+        test_play_channels, test_play_ch, test_play_stop, test_play_function,
+        test_play_invalid_mml, test_play_errors, test_audio_resume_gating,
+        test_exception_safety_net,
         test_command_queue_pget,
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
-        test_session_run_frame_yields, test_direct_graphics_immediate,
+        test_session_run_frame_yields, test_break_stops_sound,
+        test_direct_graphics_immediate,
         test_mod_fraction,
         test_renum, test_renum_keeps_rem,
         test_store_uppercases_code,

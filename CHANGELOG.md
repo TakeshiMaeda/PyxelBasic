@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4
+- Added sound: `PLAY` to play MML on Pyxel's 4 channels
+- Added the `PLAY(ch)` function returning whether a channel is playing
+- Added sprites: a Sprite plane between the Graphic and Text planes
+- Added hexadecimal integer literals with the `&H` prefix (e.g. `&HFF`)
+- Added the `HEX$(n)` function
+- Fixed a crash when a function was called with the wrong number of arguments
+- `CLS` now errors when the mask is outside 1-3
+- Added the `play.bas` sample
+- Added the `sprite.bas` sample
+- Added the `jumpman.bas` sample
+
 ## 0.1.3
 - Added the `brickbreaker.bas` sample
 - Fixed a crash in `POINT` in thread mode

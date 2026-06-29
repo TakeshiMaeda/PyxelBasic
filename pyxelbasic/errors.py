@@ -38,6 +38,11 @@ class Err(IntEnum):
     INVALID_CHAR = 119
     INVALID_COMPARISON_OP = 120
     INVALID_CIRCLE_SYNTAX = 121
+    INVALID_HEX_LITERAL = 122
+    WRONG_ARG_COUNT = 123
+    INVALID_SPRITE_SYNTAX = 124
+    INVALID_CLS_MASK = 125
+    INVALID_PLAY_SYNTAX = 126
 
     # --- 2xx: type ---
     NUMBER_REQUIRED = 201
@@ -56,6 +61,11 @@ class Err(IntEnum):
     OUT_OF_DATA = 402
     INVALID_DATA = 403
     RESTORE_NO_DATA = 404
+    SPRITE_OUT_OF_RANGE = 405
+    SPRITE_PATTERN_OVERFLOW = 406
+    INVALID_SPRITE_DATA = 407
+    PLAY_CHANNEL_OUT_OF_RANGE = 408
+    INVALID_MML = 409
 
     # --- 5xx: file / command ---
     SAVE_REQUIRES_NAME = 501
@@ -85,6 +95,11 @@ MESSAGES = {
     Err.INVALID_CHAR: "Invalid character: '%s'",
     Err.INVALID_COMPARISON_OP: "Invalid comparison operator",
     Err.INVALID_CIRCLE_SYNTAX: "Invalid CIRCLE syntax",
+    Err.INVALID_HEX_LITERAL: "Invalid hex literal",
+    Err.WRONG_ARG_COUNT: "Wrong number of arguments: %s",
+    Err.INVALID_SPRITE_SYNTAX: "Invalid SPRITE syntax",
+    Err.INVALID_CLS_MASK: "Invalid CLS argument (1-3): %s",
+    Err.INVALID_PLAY_SYNTAX: "Invalid PLAY syntax",
 
     # 2xx: type
     Err.NUMBER_REQUIRED: "Number required",
@@ -103,6 +118,11 @@ MESSAGES = {
     Err.OUT_OF_DATA: "Out of DATA",
     Err.INVALID_DATA: "Invalid DATA value: %s",
     Err.RESTORE_NO_DATA: "No DATA at line %d",
+    Err.SPRITE_OUT_OF_RANGE: "Sprite value out of range: %s",
+    Err.SPRITE_PATTERN_OVERFLOW: "Sprite pattern overflow",
+    Err.INVALID_SPRITE_DATA: "Invalid sprite data character: %s",
+    Err.PLAY_CHANNEL_OUT_OF_RANGE: "Play channel out of range (0-3): %s",
+    Err.INVALID_MML: "Invalid MML: %s",
 
     # 5xx: file / command
     Err.SAVE_REQUIRES_NAME: "SAVE requires a file name",

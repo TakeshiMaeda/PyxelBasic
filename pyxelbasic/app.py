@@ -14,9 +14,12 @@ import time
 
 import pyxel
 
-from .console import PyxelRenderer, PyxelGraphicsSurface, CHAR_W, CHAR_H
+from .console import (
+    PyxelRenderer, PyxelGraphicsSurface, PyxelSpritePlane, CHAR_W, CHAR_H,
+)
+from .audio import PyxelBasicAudio
 from .runtime import (
-    InputRing, CommandQueue, DirectGraphics, GFX_QUEUE_CAPACITY,
+    InputRing, CommandQueue, DirectGraphics, SpriteTable, GFX_QUEUE_CAPACITY,
     EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
 from .session import Session, CYCLE_STEPS, CYCLE_PERIOD, STEPS_PER_FRAME
@@ -48,7 +51,14 @@ class App:
 
         self.input_ring = InputRing()
         self.gfx_surface = PyxelGraphicsSurface(cols * CHAR_W, rows * CHAR_H)
-        self.renderer = PyxelRenderer(cols, rows, self.gfx_surface)
+        # Sprite display table, shared between the VM (writes via PUT SPRITE) and
+        # the sprite plane (reads a snapshot each frame). The pattern pixels live
+        # on the graphics surface's sprite_img texture (written by SET SPRITE).
+        self.sprite_table = SpriteTable()
+        self.sprite_plane = PyxelSpritePlane(self.gfx_surface.sprite_img,
+                                             self.sprite_table)
+        self.renderer = PyxelRenderer(cols, rows, self.gfx_surface,
+                                      sprite_plane=self.sprite_plane)
         # Graphics target depends on the mode. Threaded: a bounded, thread-safe
         # CommandQueue the main thread drains. Main-driven: a same-thread direct
         # writer (no queue, no blocking) since the VM runs on this thread.
@@ -58,13 +68,24 @@ class App:
         else:
             self.gfx_queue = DirectGraphics(self.gfx_surface)
 
+        # Audio runs on its own command sink (not the graphics queue) so PLAY runs
+        # on the main thread without competing with drawing. Threaded: a queue the
+        # main thread drains against the audio object; main-driven: a direct sink.
+        self.audio = PyxelBasicAudio()
+        if exec_mode == "thread":
+            self.audio_queue = CommandQueue(GFX_QUEUE_CAPACITY)
+        else:
+            self.audio_queue = DirectGraphics(self.audio)
+
         self.session = Session(
             cols, rows, self.gfx_queue, self.input_ring,
             workdir=workdir, autoload=autoload, autorun=autorun,
             cycle_steps=cycle_steps if cycle_steps is not None else CYCLE_STEPS,
             cycle_period=cycle_period if cycle_period is not None else CYCLE_PERIOD,
             debug_throttle=debug_throttle,
-            vsync_enabled=(exec_mode == "main"))
+            vsync_enabled=(exec_mode == "main"),
+            sprite_table=self.sprite_table,
+            audio=self.audio_queue)
 
         self.confirm_quit = False
         self.show_fps = show_fps
@@ -101,9 +122,10 @@ class App:
     def run(self):
         """Enter the Pyxel main loop (blocks until the window closes)."""
         pyxel.run(self.update, self.draw)
-        # Window closed: stop the session and release any blocked put().
+        # Window closed: stop the session and release any blocked put()/call().
         self.session.request_stop()
         self.gfx_queue.stop()
+        self.audio_queue.stop()
 
     # --- Main loop ---
     def update(self):
@@ -111,6 +133,8 @@ class App:
             self._update_fps()
         # Apply queued graphics every frame (also frees a back-pressured VM).
         self.gfx_queue.drain(self.gfx_surface)
+        # Service queued audio commands / blocked play calls on the main thread.
+        self.audio_queue.drain(self.audio)
 
         if self.confirm_quit:
             if pyxel.btnp(pyxel.KEY_Y):

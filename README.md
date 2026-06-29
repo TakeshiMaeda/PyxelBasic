@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.3.
+> This is version 0.1.4.
 
 ## Features
 
@@ -18,6 +18,8 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 - Numeric and string variables, and multi-dimensional arrays
 - Built-in functions for strings, math, random numbers, and input
 - Point and line graphics plus a text screen
+- Sprites: an 8x8 / 16x16 sprite plane between the graphics and text planes (`SET SPRITE` / `PUT SPRITE`)
+- Sound: play MML on Pyxel's 4 channels, with looping BGM and sound-effect interrupts (`PLAY`)
 - Switchable execution model (startup option): the Pyxel main loop or a separate thread
 - Save / load programs to files (`SAVE` / `LOAD`)
 - Runs on Pyxel (use of Pyxel's own features is planned)
@@ -98,8 +100,11 @@ RUN
 | `samples/graph.bas` | Graphics with lines and points |
 | `samples/circles.bas` | Draw circles/ellipses with CIRCLE and ratio |
 | `samples/stick.bas` | Move a dot with the arrow keys (STICK input) |
+| `samples/sprite.bas` | Move an animated sprite with the arrow keys (SET/PUT SPRITE) |
+| `samples/play.bas` | Looping BGM with a sound-effect interrupt (PLAY) |
 | `samples/meteo.bas` | Dodge meteors falling from the top with the arrow keys (no collision detection) |
 | `samples/brickbreaker.bas` | Block breaker |
+| `samples/jumpman.bas` | Climb terrain with gravity and jumping (SET/PUT SPRITE, PLAY) |
 | `samples/fireworks.bas` | Fireworks display |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |
 
@@ -118,8 +123,8 @@ For the **complete reference** of implemented statements, functions, and operato
 
 Main elements:
 
-- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `RANDOMIZE` `VSYNC` `END`/`STOP`
-- Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT`
+- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - Operators: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
 ## Project Layout
@@ -138,6 +143,7 @@ PyxelBasic/
 │   ├── session.py         BASIC VM session (drives edit/run/input on a separate thread; Pyxel-independent)
 │   ├── runtime.py         inter-thread plumbing (input event ring, graphics queue; Pyxel-independent)
 │   ├── console.py         Pyxel render front end (text / graphics renderer)
+│   ├── audio.py           Pyxel audio front end (PLAY / MML; Sound per call)
 │   └── app.py             Pyxel terminal (input capture, rendering, main loop)
 ├── samples/               sample programs (.bas)
 ├── tests/

@@ -44,25 +44,33 @@ STATEMENT_HANDLERS = {
     "READ":      "_do_read",
     "RANDOMIZE": "_do_randomize",
     "VSYNC":     "_do_vsync",
+    "SET":       "_do_set",
+    "PUT":       "_do_put",
+    "PLAY":      "_do_play",
 }
 
-# Function keyword -> (Evaluator method name, raw).
-# raw=True : the handler parses its own arguments (receives only the Evaluator).
+# Function keyword -> (Evaluator method name, raw, min_args, max_args).
+# raw=True : the handler parses its own arguments (receives only the Evaluator);
+#            argument-count checking is left to the handler, so min/max are None.
 # raw=False: the arglist is pre-evaluated; the handler receives (evaluator, args).
+#            The dispatcher checks min_args <= len(args) <= max_args before calling,
+#            so handlers can index args without guarding against a missing argument.
 FUNCTION_HANDLERS = {
-    "RND":    ("_fn_rnd",    True),
-    "INKEY$": ("_fn_inkey",  True),
-    "LEN":    ("_fn_len",    False),
-    "LEFT$":  ("_fn_left",   False),
-    "RIGHT$": ("_fn_right",  False),
-    "MID$":   ("_fn_mid",    False),
-    "CHR$":   ("_fn_chr",    False),
-    "ASC":    ("_fn_asc",    False),
-    "STR$":   ("_fn_str",    False),
-    "VAL":    ("_fn_val",    False),
-    "STICK":  ("_fn_stick",  False),
-    "BUTTON": ("_fn_button", False),
-    "POINT":  ("_fn_point",  False),
+    "RND":    ("_fn_rnd",    True,  None, None),
+    "INKEY$": ("_fn_inkey",  True,  None, None),
+    "LEN":    ("_fn_len",    False, 1, 1),
+    "LEFT$":  ("_fn_left",   False, 2, 2),
+    "RIGHT$": ("_fn_right",  False, 2, 2),
+    "MID$":   ("_fn_mid",    False, 2, 3),
+    "CHR$":   ("_fn_chr",    False, 1, 1),
+    "ASC":    ("_fn_asc",    False, 1, 1),
+    "STR$":   ("_fn_str",    False, 1, 1),
+    "HEX$":   ("_fn_hex",    False, 1, 1),
+    "VAL":    ("_fn_val",    False, 1, 1),
+    "STICK":  ("_fn_stick",  False, 1, 1),
+    "BUTTON": ("_fn_button", False, 1, 1),
+    "POINT":  ("_fn_point",  False, 2, 2),
+    "PLAY":   ("_fn_play",   False, 1, 1),
 }
 
 # Single-argument math functions: keyword -> callable applied to one number.
@@ -77,8 +85,10 @@ MATH1 = {
 # Immediate (direct) mode commands (handled by App, not the interpreter core).
 DIRECT = {"RUN", "LIST", "NEW", "RENUM", "SAVE", "LOAD"}
 
-# Syntactic keywords (neither operators nor statements).
-SYNTAX = {"THEN", "ELSE", "TO", "STEP"}
+# Syntactic keywords (neither operators nor statements). SPRITE is the second
+# word of the SET SPRITE / PUT SPRITE statements; it is reserved so it tokenizes
+# as a keyword, but it is not itself a statement or function.
+SYNTAX = {"THEN", "ELSE", "TO", "STEP", "SPRITE"}
 
 # Word-form operators.
 WORD_OPS = {"MOD", "AND", "OR", "NOT", "XOR"}
@@ -119,6 +129,7 @@ FRAME_BREAK = {
     "LINEB", "LINEBF",  # rectangle drawing
     "CIRCLE", "CIRCLEBF",  # circle / ellipse drawing
     "STICK", "BUTTON",  # input polling (functions)
+    "PUT",              # PUT SPRITE updates the display table each game-loop frame
 }
 
 # --- Derived sets (generated from the maps above; do not hand-edit) ---

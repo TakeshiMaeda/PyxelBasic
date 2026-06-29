@@ -26,6 +26,22 @@ from .keywords import (
 # Lexer
 # ---------------------------------------------------------------------------
 
+class HexInt(int):
+    """An integer that was written as an &H hex literal.
+
+    Behaves exactly like int for evaluation, arithmetic and PRINT (so &HFF is
+    just 255 everywhere), but remembers the original hex digits so detokenize()
+    can round-trip it back to &H form. RENUM rewrites a line through
+    tokenize()/detokenize(); without this, &HFF on a renumbered line would come
+    back as the decimal 255.
+    """
+
+    def __new__(cls, digits):
+        obj = super().__new__(cls, int(digits, 16))
+        obj.digits = digits
+        return obj
+
+
 def tokenize(src):
     """Convert one line into a token list.
 
@@ -52,6 +68,18 @@ def tokenize(src):
                 raise BasicError(Err.UNTERMINATED_STRING)
             tokens.append(("STR", "".join(buf)))
             i = j + 1
+            continue
+        # Hex literal: &H followed by hex digits (classic BASIC style)
+        if c == "&" and i + 1 < n and src[i + 1] in "Hh":
+            j = i + 2
+            buf = []
+            while j < n and src[j] in "0123456789abcdefABCDEF":
+                buf.append(src[j])
+                j += 1
+            if not buf:
+                raise BasicError(Err.INVALID_HEX_LITERAL)
+            tokens.append(("NUM", HexInt("".join(buf))))
+            i = j
             continue
         # Number
         if c.isdigit() or (c == "." and i + 1 < n and src[i + 1].isdigit()):
@@ -373,12 +401,18 @@ class Evaluator:
 
         spec = self.interp._func_dispatch.get(name)
         if spec is not None:
-            fn, raw = spec
+            fn, raw, lo, hi = spec
             if raw:
                 return fn(self)
-            return fn(self, self.parse_arglist())
+            args = self.parse_arglist()
+            if not (lo <= len(args) <= hi):
+                raise BasicError(Err.WRONG_ARG_COUNT, name)
+            return fn(self, args)
         # Single-argument math function (name guaranteed to be in MATH1 here)
-        return MATH1[name](self._num(self.parse_arglist()[0]))
+        args = self.parse_arglist()
+        if len(args) != 1:
+            raise BasicError(Err.WRONG_ARG_COUNT, name)
+        return MATH1[name](self._num(args[0]))
 
     # --- Function handlers (wired by name in keywords.FUNCTION_HANDLERS) ---
     # raw handlers parse their own arguments; the rest receive a pre-evaluated
@@ -422,9 +456,17 @@ class Evaluator:
     def _fn_str(self, args):
         return basic_str(self._num(args[0]))
 
+    def _fn_hex(self, args):
+        # Uppercase hex string of the integerized value. Negatives keep a '-'
+        # sign (no fixed-width two's complement, since values are arbitrary int).
+        return format(int(self._num(args[0])), "X")
+
     def _fn_val(self, args):
+        txt = basic_str(args[0]).strip()
         try:
-            txt = basic_str(args[0]).strip()
+            # A leading &H is read as hexadecimal (matches the &H literal form).
+            if len(txt) > 2 and txt[0] == "&" and txt[1] in "Hh":
+                return int(txt[2:], 16)
             return float(txt) if "." in txt else int(txt)
         except ValueError:
             return 0
@@ -439,6 +481,12 @@ class Evaluator:
         x = int(self._num(args[0]))
         y = int(self._num(args[1]))
         return self.interp.io.point(x, y)
+
+    def _fn_play(self, args):
+        ch = int(self._num(args[0]))
+        if not 0 <= ch <= 3:
+            raise BasicError(Err.PLAY_CHANNEL_OUT_OF_RANGE, ch)
+        return self.interp.io.playing(ch)
 
     # --- Helpers ---
     def _num(self, v):
@@ -494,8 +542,8 @@ class Interpreter:
             kw: getattr(self, name) for kw, name in STATEMENT_HANDLERS.items()
         }
         self._func_dispatch = {
-            kw: (getattr(Evaluator, name), raw)
-            for kw, (name, raw) in FUNCTION_HANDLERS.items()
+            kw: (getattr(Evaluator, name), raw, lo, hi)
+            for kw, (name, raw, lo, hi) in FUNCTION_HANDLERS.items()
         }
         self.reset_runtime()
         self.state = "EDIT"
@@ -698,6 +746,13 @@ class Interpreter:
             self.io.print_line("?ERROR %d in line %d: %s" % (int(e.code), line_no, e))
             self.state = "EDIT"
             return
+        except Exception as e:
+            # Safety net: an unexpected Python-level error (e.g. a non-numeric
+            # value where a number is required) must report a BASIC error and
+            # drop to edit mode, never crash PyxelBasic.
+            self.io.print_line("?ERROR in line %d: %s" % (line_no, e))
+            self.state = "EDIT"
+            return
         if self.state == "RUN" and not self.jumped:
             self.pc += 1
 
@@ -769,10 +824,15 @@ class Interpreter:
 
     def _do_cls(self, toks):
         # CLS [mask]: 1 = text only, 2 = graphics only, 3 = both (bit OR).
-        # No argument clears both (mask 3), as before.
+        # No argument clears both (mask 3), as before. The mask is used as bit
+        # flags downstream, so anything outside 1..3 would silently clear an
+        # unexpected subset (or nothing); reject it instead of acting oddly. 0 is
+        # rejected too (it would be a no-op that reads like a bare CLS).
         mask = 3
         if len(toks) > 1:
             mask = int(self._eval_from(toks, 1))
+        if not 1 <= mask <= 3:
+            raise BasicError(Err.INVALID_CLS_MASK, mask)
         self.io.cls(mask)
 
     def _do_color(self, toks):
@@ -1183,6 +1243,170 @@ class Interpreter:
             words = "(none)"
         self.io.print_line("FRAME BREAK: " + words)
 
+    # --- Sprites ---
+    _HEX_DIGITS = "0123456789abcdefABCDEF"
+
+    def _do_set(self, toks):
+        # SET SPRITE no, "<hexstring>"
+        # Define 8x8 patterns from a hex string (one char = one pixel colour).
+        # 64 chars per 8x8 pattern; a short string is padded with '0', a long one
+        # spills into the following 8x8 pattern numbers in 64-char chunks.
+        if len(toks) < 2 or toks[1] != ("KW", "SPRITE"):
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        ev = Evaluator(toks, self, 2)
+        no = int(ev.parse())
+        if ev.peek()[0] != "COMMA":
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        ev.advance()
+        data = ev.parse()
+        if ev.peek()[0] is not None or not isinstance(data, str):
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        if not (0 <= no <= 1023):
+            raise BasicError(Err.SPRITE_OUT_OF_RANGE, "no")
+        for ch in data:
+            if ch not in self._HEX_DIGITS:
+                raise BasicError(Err.INVALID_SPRITE_DATA, ch)
+        # Pad up to a whole number of 8x8 patterns (an empty string is one
+        # all-zero pattern, matching "missing pixels are filled with 0").
+        if len(data) == 0:
+            data = "0" * 64
+        elif len(data) % 64 != 0:
+            data += "0" * (64 - len(data) % 64)
+        count = len(data) // 64
+        if no + count - 1 > 1023:
+            raise BasicError(Err.SPRITE_PATTERN_OVERFLOW)
+        colors = [int(ch, 16) for ch in data]
+        self.io.set_sprite(no, colors)
+
+    def _do_put(self, toks):
+        # PUT SPRITE id, (x,y), no, size [,colkey]   -> enable + set the entry
+        # PUT SPRITE id, OFF                          -> disable the entry
+        if len(toks) < 2 or toks[1] != ("KW", "SPRITE"):
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        ev = Evaluator(toks, self, 2)
+        sid = int(ev.parse())
+        if ev.peek()[0] != "COMMA":
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        ev.advance()
+        # OFF form: nothing may follow OFF.
+        if ev.peek() == ("VAR", "OFF"):
+            ev.advance()
+            if ev.peek()[0] is not None:
+                raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+            if not (0 <= sid <= 1023):
+                raise BasicError(Err.SPRITE_OUT_OF_RANGE, "id")
+            self.io.put_sprite_off(sid)
+            return
+        # Full form.
+        coords = ev.parse_arglist()
+        if len(coords) != 2:
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        x, y = int(coords[0]), int(coords[1])
+        no = int(self._put_after_comma(ev))
+        size = int(self._put_after_comma(ev))
+        colkey = -1
+        if ev.peek()[0] == "COMMA":
+            ev.advance()
+            colkey = int(ev.parse())
+        if ev.peek()[0] is not None:
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        if not (0 <= sid <= 1023):
+            raise BasicError(Err.SPRITE_OUT_OF_RANGE, "id")
+        if size not in (0, 1):
+            raise BasicError(Err.SPRITE_OUT_OF_RANGE, "size")
+        no_max = 1023 if size == 0 else 255
+        if not (0 <= no <= no_max):
+            raise BasicError(Err.SPRITE_OUT_OF_RANGE, "no")
+        if not (-1 <= colkey <= 15):
+            raise BasicError(Err.SPRITE_OUT_OF_RANGE, "colkey")
+        self.io.put_sprite(sid, x, y, no, size, colkey)
+
+    @staticmethod
+    def _put_after_comma(ev):
+        if ev.peek()[0] != "COMMA":
+            raise BasicError(Err.INVALID_SPRITE_SYNTAX)
+        ev.advance()
+        return ev.parse()
+
+    # --- Sound (PLAY) ---
+    def _do_play(self, toks):
+        # PLAY "m0"[,"m1","m2","m3"] / PLAY LOOP ... / PLAY CH ch,"mml" /
+        # PLAY LOOP CH ch,"mml" / PLAY STOP [ch,...]
+        # LOOP and CH are contextual keywords: they tokenize as VAR and are
+        # matched only here, by position, so they stay usable as variable names.
+        if len(toks) >= 2 and toks[1] == ("KW", "STOP"):
+            self._play_stop(toks)
+            return
+        start = 1
+        loop = False
+        if len(toks) > start and toks[start] == ("VAR", "LOOP"):
+            loop = True
+            start += 1
+        if len(toks) > start and toks[start] == ("VAR", "CH"):
+            self._play_one_channel(toks, start + 1, loop)
+            return
+        mmls = self._parse_play_slots(toks, start)
+        bad = self.io.play_channels(mmls, loop)
+        if bad is not None:
+            raise BasicError(Err.INVALID_MML, bad)
+
+    def _play_stop(self, toks):
+        # PLAY STOP [ch [, ch ...]]  (no channels -> stop all)
+        channels = []
+        ev = Evaluator(toks, self, 2)
+        while ev.peek()[0] is not None:
+            ch = int(ev.parse())
+            self._check_play_channel(ch)
+            channels.append(ch)
+            if ev.peek()[0] == "COMMA":
+                ev.advance()
+            else:
+                break
+        if ev.peek()[0] is not None:
+            raise BasicError(Err.INVALID_PLAY_SYNTAX)
+        self.io.play_stop(channels)
+
+    def _play_one_channel(self, toks, start, loop):
+        # PLAY [LOOP] CH ch, "mml"
+        ev = Evaluator(toks, self, start)
+        ch = int(ev.parse())
+        if ev.peek()[0] != "COMMA":
+            raise BasicError(Err.INVALID_PLAY_SYNTAX)
+        ev.advance()
+        mml = ev.parse()
+        if not isinstance(mml, str) or ev.peek()[0] is not None:
+            raise BasicError(Err.INVALID_PLAY_SYNTAX)
+        self._check_play_channel(ch)
+        bad = self.io.play_ch(ch, mml, loop)
+        if bad is not None:
+            raise BasicError(Err.INVALID_MML, bad)
+
+    def _parse_play_slots(self, toks, start):
+        # Up to 4 comma-separated MML slots; an empty slot (consecutive commas,
+        # leading comma, or end) is None and means "this channel does nothing".
+        ev = Evaluator(toks, self, start)
+        slots = []
+        while True:
+            if ev.peek()[0] in ("COMMA", None):
+                slots.append(None)
+            else:
+                v = ev.parse()
+                if not isinstance(v, str):
+                    raise BasicError(Err.INVALID_PLAY_SYNTAX)
+                slots.append(v)
+            if ev.peek()[0] == "COMMA":
+                ev.advance()
+                continue
+            break
+        if ev.peek()[0] is not None or len(slots) > 4:
+            raise BasicError(Err.INVALID_PLAY_SYNTAX)
+        return slots
+
+    @staticmethod
+    def _check_play_channel(ch):
+        if not 0 <= ch <= 3:
+            raise BasicError(Err.PLAY_CHANNEL_OUT_OF_RANGE, ch)
+
 
 # ---------------------------------------------------------------------------
 # Multidimensional array helpers
@@ -1225,7 +1449,10 @@ def detokenize(toks):
         if kind == "STR":
             parts.append('"%s"' % val)
         elif kind == "NUM":
-            parts.append(basic_str(val))
+            if isinstance(val, HexInt):
+                parts.append("&H" + val.digits)
+            else:
+                parts.append(basic_str(val))
         else:
             parts.append(str(val))
     # Join simply with spaces
@@ -1242,6 +1469,6 @@ def detokenize(toks):
 for _kw, _method in STATEMENT_HANDLERS.items():
     assert hasattr(Interpreter, _method), \
         "statement %r is wired to missing Interpreter.%s" % (_kw, _method)
-for _kw, (_method, _raw) in FUNCTION_HANDLERS.items():
+for _kw, (_method, _raw, _lo, _hi) in FUNCTION_HANDLERS.items():
     assert hasattr(Evaluator, _method), \
         "function %r is wired to missing Evaluator.%s" % (_kw, _method)

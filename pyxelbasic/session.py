@@ -21,7 +21,7 @@ from .errors import BasicError, Err
 from .interpreter import Interpreter, tokenize
 from .textscreen import TextScreen
 from .editor import Editor
-from .runtime import KeyState, EV_CHAR, EV_DOWN, EV_REPEAT
+from .runtime import KeyState, SpriteTable, EV_CHAR, EV_DOWN, EV_REPEAT
 from .keywords import (
     KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_HOME, KEY_END,
     KEY_INSERT, KEY_DELETE, KEY_BACKSPACE, KEY_RETURN,
@@ -96,10 +96,12 @@ class SessionIO:
     are enqueued for the main thread; input reads consult the key state.
     """
 
-    def __init__(self, screen, gfx_queue, keys):
+    def __init__(self, screen, gfx_queue, keys, sprite_table, audio=None):
         self.screen = screen
         self.gfx = gfx_queue
         self.keys = keys
+        self.sprite_table = sprite_table
+        self.audio = audio          # dedicated audio command sink (None in headless tests)
 
     # --- text (direct to the VM-owned screen) ---
     def cls(self, mask=3):
@@ -108,6 +110,7 @@ class SessionIO:
             self.screen.cls()           # text grid (here)
         if mask & 2:
             self.gfx.put(("cls", ()))   # graphics surface (main thread)
+            self.sprite_table.clear()   # sprite display table (CLS 2 clears it too)
 
     def set_color(self, col):
         self.screen.set_color(col)
@@ -157,6 +160,42 @@ class SessionIO:
         # it reads the surface directly. Either way prior draws are applied first.
         return self.gfx.pget(x, y)
 
+    # --- sprites ---
+    def set_sprite(self, no, colors):
+        # Pattern pixels live in a Pyxel texture, so write them through the same
+        # graphics path as PSET (main thread applies them during drain).
+        self.gfx.put(("set_sprite", (no, colors)))
+
+    def put_sprite(self, sid, x, y, no, size, colkey):
+        # Display table is plain data (no texture); update it directly. The
+        # front end reads a snapshot of it each frame to compose the sprite plane.
+        self.sprite_table.put(sid, x, y, no, size, colkey)
+
+    def put_sprite_off(self, sid):
+        self.sprite_table.off(sid)
+
+    # --- sound (PLAY) ---
+    # Play calls round-trip through the audio sink (validate + play on the main
+    # thread) and return None, or the offending MML for the core to raise on.
+    def play_channels(self, mmls, loop):
+        if self.audio is None:
+            return None
+        return self.audio.call("play_channels", (mmls, loop))
+
+    def play_ch(self, ch, mml, loop):
+        if self.audio is None:
+            return None
+        return self.audio.call("play_ch", (ch, mml, loop))
+
+    def play_stop(self, channels):
+        if self.audio is not None:
+            self.audio.put(("play_stop", (channels,)))
+
+    def playing(self, ch):
+        if self.audio is None:
+            return 0
+        return self.audio.call("playing", (ch,))
+
     # --- input (read the derived key state) ---
     def inkey(self):
         return self.keys.inkey()
@@ -172,14 +211,20 @@ class Session:
     def __init__(self, cols, rows, gfx_queue, input_ring, workdir=None,
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
-                 debug_throttle=False, vsync_enabled=False):
+                 debug_throttle=False, vsync_enabled=False, sprite_table=None,
+                 audio=None):
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
         self.keys = KeyState()
         self.gfx_queue = gfx_queue
         self.input_ring = input_ring
-        self.io = SessionIO(self.screen, gfx_queue, self.keys)
+        # Sprite display table (shared with the front end, which reads a snapshot
+        # of it each frame). Created here when not supplied, so headless tests
+        # that build a Session without a front end still work.
+        self.sprite_table = sprite_table if sprite_table is not None else SpriteTable()
+        self.io = SessionIO(self.screen, gfx_queue, self.keys, self.sprite_table,
+                            audio=audio)
         # vsync_enabled is True only in the main-driven execution mode, where the
         # interpreter honours frame-break/VSYNC; the threaded mode leaves it off.
         self.interp = Interpreter(self.io, vsync_enabled=vsync_enabled)
@@ -369,6 +414,9 @@ class Session:
         self.mode = "EDIT"
 
     def _do_break(self):
+        # Ctrl+C aborts the run and also silences every sound channel (an empty
+        # channel list means all), so a looping BGM does not keep playing.
+        self.io.play_stop([])
         self.screen.print_line("")
         self.screen.print_line("BREAK in line %d" % self.interp.cur_line)
         self.interp.state = "EDIT"
@@ -398,6 +446,10 @@ class Session:
             self._direct_command(s)
         except BasicError as e:
             self.screen.print_line("?ERROR %d: %s" % (int(e.code), e))
+        except Exception as e:
+            # Safety net for direct commands too: report instead of crashing.
+            self.interp.state = "EDIT"
+            self.screen.print_line("?ERROR: %s" % (e,))
 
     def _split_lineno(self, s):
         i = 0

@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.3
+- Target version: v0.1.4
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -119,6 +119,33 @@ Several statements can be placed on one line, separated by `:`, and run left to 
   statement (`IF` claims its `THEN` / `ELSE` clauses, `DATA` its data list, and
   `REM` the comment).
 
+### 3.4 Tokens and Spacing
+
+A line is split into tokens: numbers, string literals, names (variables, reserved
+words, functions), operators, and symbols. **Spacing matters between names.**
+PyxelBasic does *not* crunch reserved words out of unspaced text: a reserved word,
+function name, variable name, or number written with no separating space from an
+adjacent one is read as a **single name**, taken greedily for as long as letters
+and digits continue. So a space is **required** wherever two of these would
+otherwise run together:
+
+| Written | Read as | Result |
+|---|---|---|
+| `PRINT BB` | `PRINT` `BB` | prints variable `BB` |
+| `PRINTBB` | `PRINTBB` | one variable name (not `PRINT BB`) |
+| `(C+1) MOD 3` | `(C+1)` `MOD` `3` | remainder of `C+1` by 3 |
+| `(C+1)MOD3` | `(C+1)` `MOD3` | `MOD3` is read as a variable -> syntax error |
+| `FOR I=1 TO 10` | `FOR` `I` `=` `1` `TO` `10` | a space around `TO` (and `STEP`) is required |
+
+Operators and symbols (`+ - * / ^ = < > <= >= <> ( ) , ; :`) are always token
+boundaries and never need a surrounding space, so `A=1`, `B=A*2`, and `PRINT(X)`
+are all fine — `=`, `*`, and `(` separate the names on their own.
+
+This is a deliberate choice. Unlike some classic BASICs, `FORI=1TO10` does **not**
+work here. The benefit is that variable names which *contain* a reserved word stay
+usable — for example `SCORE` (contains `OR`), `TOTAL` (contains `TO`), or
+`COUNT` — because names are only ever split on spaces, never in the middle.
+
 ---
 
 ## 4. Direct Commands
@@ -155,6 +182,7 @@ Management commands entered at the prompt without a line number.
 
 - Comparison and logical operations return **True = -1, False = 0**.
 - A real number with an integer value is displayed as an integer (e.g. `4.0` → `4`).
+- Integer constants may also be written in **hexadecimal** with the `&H` prefix (e.g. `&HFF` = 255). Hex digits are case-insensitive. Use `HEX$(n)` to convert a number to a hex string, and `VAL("&H...")` to parse one.
 
 ---
 
@@ -365,9 +393,13 @@ Clears the screen and, when text is cleared, moves the cursor to the top-left. T
 | mask | Clears |
 |---|---|
 | 1 | Text only |
-| 2 | Graphics only |
+| 2 | Graphics plane and the sprite display table |
 | 3 | Both |
 | (omitted) | Both |
+
+A `mask` outside 1-3 is an error (code 125); `0` is rejected too (use a bare `CLS` or `CLS 3` to clear both).
+
+When the graphics plane is cleared (mask 2 or 3), the sprite display table is cleared too (every sprite is turned off; see [SET SPRITE / PUT SPRITE](#set-sprite--put-sprite)).
 
 ### LOCATE
 ```
@@ -426,6 +458,55 @@ Initializes the random number generator. If the seed is omitted, it is initializ
 ### VSYNC
 A frame-control statement. In main mode it controls frame breaks (see [Execution Pacing and VSYNC](#10-execution-pacing-and-vsync)). In thread mode it is a no-op: only `VSYNC LIST` prints `FRAME BREAK: (none)`, and every other form does nothing (and is not an error).
 
+### SET SPRITE / PUT SPRITE
+Sprites are drawn on the Sprite plane, between the Graphic plane (behind) and the Text plane (in front). `SET SPRITE` defines pattern pixels; `PUT SPRITE` controls a display table that the frame is composed from (it does not draw immediately). See [The Sprite Plane](#113-the-sprite-plane) for the model.
+
+```
+SET SPRITE no, "hexstring"
+```
+Defines 8x8 sprite patterns from a hex string, one character (`0`-`9`, `A`-`F`, lower case allowed) per pixel color. 64 characters make up one 8x8 pattern (8 per row, 8 rows). A string shorter than a multiple of 64 is padded with `0`; a longer one fills consecutive pattern numbers in 64-character chunks. `no` (0-1023) is the first 8x8 pattern number written.
+
+- Error if a character is not a hex digit, if `no` is out of range, or if the write would run past pattern 1023.
+- 16x16 patterns cannot be defined directly; a 16x16 sprite is four 8x8 patterns (see below).
+
+```
+PUT SPRITE id, (X, Y), no, size [, colkey]
+PUT SPRITE id, OFF
+```
+Updates the display table entry `id` (0-1023). The first form enables the entry and sets it; the second turns it off.
+
+| Argument | Meaning |
+|---|---|
+| `id` | Display slot, 0-1023. Smaller `id` draws in front. |
+| `X, Y` | Top-left position. Off-screen coordinates are allowed; only the on-screen part is drawn. |
+| `no` | Pattern number: an 8x8 number (0-1023) when `size` = 0, a 16x16 number (0-255) when `size` = 1. |
+| `size` | 0 = 8x8, 1 = 16x16. |
+| `colkey` | Transparent color (0-15), or `-1` for none (the default). |
+
+A 16x16 sprite number `m` is the 2x2 group of 8x8 patterns `m*4` .. `m*4+3` (top-left, top-right, bottom-left, bottom-right). The display table holds 1024 entries; all start off. `PUT SPRITE id, OFF` takes no further arguments.
+
+In main mode, `PUT SPRITE` is a frame break (the display updates once per game-loop frame); `SET SPRITE` is not.
+
+### PLAY
+Plays sound on Pyxel's 4 channels (0-3) from [MML](https://github.com/kitao/pyxel#sound) strings. Channels play together; an empty string or an omitted channel does nothing.
+
+```
+PLAY "m0" [, "m1", "m2", "m3"]      one-shot per channel (ch0..ch3)
+PLAY LOOP "m0" [, "m1", ...]        loop the given channels (BGM)
+PLAY CH ch, "mml"                   play one channel only
+PLAY LOOP CH ch, "mml"             loop one channel only
+PLAY STOP                           stop all channels
+PLAY STOP ch [, ch ...]            stop the given channels
+```
+
+- Positional form: each argument maps to ch0..ch3 in order. `PLAY , "m1"` and `PLAY "", "m1"` play only ch1. At most 4 channels.
+- `PLAY` (no `LOOP`) plays once and, if the channel is busy, interrupts it and returns to it afterwards (a sound effect over BGM). `PLAY LOOP` replaces the channel with a sustained/looping sound (the return target) until a `PLAY STOP` or another `PLAY` on that channel.
+- `LOOP` and `CH` are keywords only in this position; they are still usable as variable names elsewhere.
+- Errors: a channel outside 0-3, malformed syntax, or an invalid MML string (the MML is validated and nothing plays in that case).
+
+### PLAY(ch) — playback status
+Used as a function, `PLAY(ch)` returns whether channel `ch` (0-3) is currently playing: `1` if playing, `0` if stopped. See [Built-in Functions](#9-built-in-functions).
+
 ### END / STOP
 ```
 END
@@ -448,7 +529,8 @@ Ends program execution.
 | `CHR$(n)` | Character for character code n |
 | `ASC(s)` | Character code of the first character of s (0 if empty) |
 | `STR$(n)` | Stringified number n |
-| `VAL(s)` | Numeric value of string s (0 if not convertible, real if it contains `.`) |
+| `HEX$(n)` | Hexadecimal string of integer n (uppercase; negatives keep a leading `-`, e.g. `HEX$(-255)` = `-FF`) |
+| `VAL(s)` | Numeric value of string s (0 if not convertible, real if it contains `.`; an `&H` prefix is parsed as hexadecimal) |
 
 ```basic
 10 A$ = "PYXELBASIC"
@@ -530,6 +612,14 @@ Ends program execution.
 10 PSET (10, 13), 11
 20 CC = POINT(10, 13)      ' CC = 11
 ```
+
+### 9.6 Sound Functions
+
+| Function | Returns |
+|---|---|
+| `PLAY(ch)` | `1` if channel `ch` (0-3) is currently playing, else `0` |
+
+`PLAY` is also a statement (see [PLAY](#play)).
 
 ---
 
@@ -619,7 +709,24 @@ VSYNC in thread mode (a backward-compatible no-op):
 - Reading: `POINT(x, y)` returns the color at a pixel.
 - Graphics are drawn to a dedicated layer and retained until `CLS` (no need to re-run every frame).
 
-### 11.3 Text Output and Control Characters
+### 11.3 The Sprite Plane
+
+The display has three layers, listed from back to front:
+
+```
+Graphic plane   (drawing statements; behind)
+Sprite plane    (sprites)
+Text plane       (PRINT / the editor; in front)
+```
+
+- **Pattern sheet.** Sprite patterns live on a 256x256 off-screen sheet of 8x8 cells: up to 1024 8x8 patterns, or 256 16x16 patterns. `SET SPRITE` writes patterns here. A 16x16 sprite is a 2x2 group of four 8x8 patterns; 8x8 number `n` and 16x16 number `m` relate as `m*4 .. m*4+3` (top-left, top-right, bottom-left, bottom-right), giving the sheet order `0,1,4,5,... / 2,3,6,7,...`.
+- **Display table.** `PUT SPRITE` does not draw immediately; it updates a table of 1024 entries (enabled flag, position, pattern number, size, transparent color). The sprite plane is rebuilt every frame from this table, so a sprite stays on screen until its entry is changed or turned off.
+- **Priority.** A smaller display `id` draws in front (id 0 is frontmost).
+- **Frame timing.** The sprite plane reflects the table's contents at the next frame draw. In thread mode the front end snapshots the table per frame: updates made before the snapshot show that frame, later ones on the next.
+
+See [SET SPRITE / PUT SPRITE](#set-sprite--put-sprite) for the statements.
+
+### 11.4 Text Output and Control Characters
 
 - `PRINT` outputs characters to the text screen. When it reaches the bottom edge, the screen scrolls upward.
 - Including the following control characters (character codes) in a string takes effect on output.
@@ -674,6 +781,11 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 119 | `Invalid character: 'x'` | An uninterpretable character |
 | 120 | `Invalid comparison operator` | Internal: bad comparison operator |
 | 121 | `Invalid CIRCLE syntax` | Syntax error in a `CIRCLE` / `CIRCLEBF` (e.g. a missing radius or color) |
+| 122 | `Invalid hex literal` | An `&H` prefix is not followed by any hex digit |
+| 123 | `Wrong number of arguments: name` | A function was called with too few or too many arguments |
+| 124 | `Invalid SPRITE syntax` | Malformed `SET SPRITE` / `PUT SPRITE` (e.g. missing `SPRITE`, or extra tokens after `OFF`) |
+| 125 | `Invalid CLS argument (1-3): n` | `CLS` was given a mask outside 1-3 (including 0) |
+| 126 | `Invalid PLAY syntax` | Malformed `PLAY` (e.g. `CH` without an MML, or more than 4 channels) |
 | 201 | `Number required` | A string was used in a numeric operation |
 | 202 | `Type mismatch in comparison` | A number was compared with a string |
 | 203 | `Cannot assign string to numeric variable: name` | Type mismatch on assignment |
@@ -686,6 +798,11 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 402 | `Out of DATA` | `DATA` has been exhausted |
 | 403 | `Invalid DATA value: value` | A `DATA` item is not a number or quoted string |
 | 404 | `No DATA at line N` | `RESTORE line` target holds no `DATA` |
+| 405 | `Sprite value out of range: name` | A `SET`/`PUT SPRITE` id, no, size, or colkey is out of range |
+| 406 | `Sprite pattern overflow` | A `SET SPRITE` write would run past pattern 1023 |
+| 407 | `Invalid sprite data character: c` | A `SET SPRITE` hex string has a non-hex character |
+| 408 | `Play channel out of range (0-3): n` | A `PLAY` channel is outside 0-3 |
+| 409 | `Invalid MML: mml` | A `PLAY` MML string could not be parsed |
 | 501 | `SAVE requires a file name` | `SAVE` without a file name |
 | 502 | `LOAD requires a file name` | `LOAD` without a file name |
 
