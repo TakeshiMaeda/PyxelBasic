@@ -137,6 +137,9 @@ class App:
         self.audio_queue.drain(self.audio)
 
         if self.confirm_quit:
+            # Keep capturing key releases so a key held when the dialog opened
+            # does not stay "down" in the VM's key state after it closes.
+            self._capture_input(releases_only=True)
             if pyxel.btnp(pyxel.KEY_Y):
                 pyxel.quit()
             elif pyxel.btnp(pyxel.KEY_N) or pyxel.btnp(pyxel.KEY_ESCAPE):
@@ -144,6 +147,7 @@ class App:
             return
         if pyxel.btnp(pyxel.KEY_ESCAPE):
             self.confirm_quit = True
+            self._capture_input(releases_only=True)
             return
         # Ctrl+C breaks a running program (handled out of band by the session).
         if pyxel.btn(pyxel.KEY_CTRL) and pyxel.btnp(pyxel.KEY_C):
@@ -154,21 +158,27 @@ class App:
         # Main-driven mode: advance the VM on this thread, one frame's worth.
         if self.exec_mode == "main":
             self.session.poll_input()
+            self.session.poll_break()   # Ctrl+C also aborts an INPUT wait
             if self.session.mode == "RUN":
                 self.session.run_frame(self.steps_per_frame)
             self.session.screen.publish()
 
-    def _capture_input(self):
-        # Typed text -> char events.
-        text = pyxel.input_text if hasattr(pyxel, "input_text") else ""
-        for ch in text:
-            self.input_ring.push((EV_CHAR, ch))
+    def _capture_input(self, releases_only=False):
+        # releases_only: while the quit dialog is open, presses and typed text
+        # belong to the dialog, but releases must still reach the VM so its
+        # held-key state does not go stale.
+        if not releases_only:
+            # Typed text -> char events.
+            text = pyxel.input_text if hasattr(pyxel, "input_text") else ""
+            for ch in text:
+                self.input_ring.push((EV_CHAR, ch))
         # Key edges -> down/up; held auto-repeat keys also emit repeat ticks.
         for pkey, kid, repeat in self.key_events:
-            if pyxel.btnp(pkey):
-                self.input_ring.push((EV_DOWN, kid))
-            elif repeat and pyxel.btnp(pkey, REPEAT_HOLD, REPEAT_PERIOD):
-                self.input_ring.push((EV_REPEAT, kid))
+            if not releases_only:
+                if pyxel.btnp(pkey):
+                    self.input_ring.push((EV_DOWN, kid))
+                elif repeat and pyxel.btnp(pkey, REPEAT_HOLD, REPEAT_PERIOD):
+                    self.input_ring.push((EV_REPEAT, kid))
             if pyxel.btnr(pkey):
                 self.input_ring.push((EV_UP, kid))
 

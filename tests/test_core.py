@@ -23,7 +23,7 @@ from pyxelbasic.runtime import (  # noqa: E402
     EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
 )
 from pyxelbasic.keywords import (  # noqa: E402
-    KEY_UP, KEY_LEFT, KEY_BTN0, KEY_BTN1,
+    KEY_UP, KEY_LEFT, KEY_BTN0, KEY_BTN1, KEY_RETURN,
 )
 from pyxelbasic.textscreen import TextScreen  # noqa: E402
 from pyxelbasic.editor import Editor  # noqa: E402
@@ -356,6 +356,46 @@ def test_string_funcs():
     check("MID$", io.out[2], "BAS")
     check("LEN", io.out[3], "10")
     check("CHR$/ASC", io.out[4], "A65")
+
+
+def test_string_funcs_edge():
+    # LEFT$/MID$ guard non-positive counts and a start below 1: they must never
+    # fall into Python negative indexing (LEFT$("ABC",-1) used to return "AB",
+    # MID$("ABCDE",0) used to return "E").
+    io, _ = run_program([
+        (10, 'PRINT "["; LEFT$("ABC", -1); "]"'),
+        (20, 'PRINT "["; LEFT$("ABC", 0); "]"'),
+        (30, 'PRINT "["; MID$("ABCDE", 0); "]"'),
+        (40, 'PRINT "["; MID$("ABCDE", 0, 2); "]"'),
+        (50, 'PRINT "["; MID$("ABCDE", 2, -1); "]"'),
+        (60, 'PRINT "["; RIGHT$("ABC", -1); "]"'),
+    ])
+    check("LEFT$ negative", io.out[0], "[]")
+    check("LEFT$ zero", io.out[1], "[]")
+    check("MID$ start 0 -> 1", io.out[2], "[ABCDE]")
+    check("MID$ start 0 with len", io.out[3], "[AB]")
+    check("MID$ negative len", io.out[4], "[]")
+    check("RIGHT$ negative", io.out[5], "[]")
+
+
+def test_round_half_away_from_zero():
+    # ROUND rounds half away from zero (classic BASIC), not banker's rounding.
+    io, _ = run_program([
+        (10, 'PRINT ROUND(0.5); " "; ROUND(2.5); " "; ROUND(1.4)'),
+        (20, 'PRINT ROUND(-0.5); " "; ROUND(-2.5); " "; ROUND(-1.4)'),
+    ])
+    check("round positive ties up", io.out[0], "1 3 1")
+    check("round negative ties down", io.out[1], "-1 -3 -1")
+
+
+def test_numeric_array_rejects_string():
+    # Assigning a string to a numeric array element is a type error (203), the
+    # same as for a scalar numeric variable (it used to be stored silently).
+    check("numeric array string assign",
+          _err_code([(10, 'A(0) = "X"')]), int(Err.STRING_TO_NUMERIC))
+    # A string array still auto-converts numbers, like string scalars do.
+    io, _ = run_program([(10, 'A$(0) = 5 : PRINT A$(0)')])
+    check("string array number assign", io.out[0], "5")
 
 
 def test_hex():
@@ -765,6 +805,53 @@ def test_break_stops_sound():
     check("break issued play_stop", ("play_stop", []) in rec.calls, True)
 
 
+def test_inkey_flush_on_run():
+    # Typing "RUN" + Enter must not leak into the program's INKEY$: the
+    # typeahead buffer is flushed when the run starts.
+    s = Session(64, 42, DirectGraphics(_Recorder()), InputRing())
+    s.interp.store_line(10, 'A$ = INKEY$ : PRINT "GOT["; A$; "]"')
+    s.interp.store_line(20, 'END')
+    for ch in "RUN":
+        s.input_ring.push((EV_CHAR, ch))
+    s.input_ring.push((EV_DOWN, KEY_RETURN))
+    s._poll_input()                  # types RUN; Enter submits and starts the run
+    while s.mode == "RUN":
+        s.run_frame(STEPS_PER_FRAME)
+    got = [r for r in _screen_rows(s.screen) if "GOT[" in r]
+    check("inkey flushed at run start", got, ["GOT[]"])
+
+
+def test_break_during_input_wait():
+    # Ctrl+C must abort the run even while waiting at an INPUT prompt (the
+    # break used to sit pending until the input was submitted).
+    rec = _Recorder()
+    s = Session(64, 42, DirectGraphics(_Recorder()), InputRing(),
+                audio=DirectGraphics(rec))
+    s.interp.store_line(10, 'INPUT A')
+    s.interp.store_line(20, 'PRINT "AFTER"')
+    s._start_run()
+    s.run_frame(STEPS_PER_FRAME)
+    check("waiting at INPUT", s.mode, "INPUT")
+    s.request_break()
+    s.poll_break()
+    check("break aborts INPUT wait", s.mode, "EDIT")
+    check("break drops interp to edit", s.interp.state, "EDIT")
+    check("break in INPUT stops sound", ("play_stop", []) in rec.calls, True)
+    check("break in INPUT shows message",
+          any("BREAK in line 10" in r for r in _screen_rows(s.screen)), True)
+
+
+def test_direct_error_resets_state():
+    # A BasicError in a direct command must drop the interpreter back to EDIT
+    # (the state used to stay "RUN" on the BasicError path).
+    s = Session(64, 42, DirectGraphics(_Recorder()), InputRing())
+    s._submit_line('GOTO 999')
+    check("direct error resets state", s.interp.state, "EDIT")
+    check("direct error printed",
+          any(("?ERROR %d" % int(Err.LINE_NOT_FOUND)) in r
+              for r in _screen_rows(s.screen)), True)
+
+
 def test_direct_graphics_immediate():
     # DirectGraphics applies each put() to the surface immediately (no queue).
     rec = _Recorder()
@@ -813,6 +900,21 @@ def test_renum_keeps_rem():
     check("renum keeps REM text", prog.get(100), 'REM ===== HEADER =====')
     check("renum keeps plain line", prog.get(110), 'PRINT "HI"')
     check("renum remaps goto", prog.get(120), 'GOTO 110')
+
+
+def test_renum_else_restore():
+    # RENUM also remaps the implicit-GOTO target after ELSE and the line
+    # argument of RESTORE (they used to be left pointing at the old numbers).
+    interp = Interpreter(MockIO())
+    interp.store_line(10, 'IF A = 1 THEN 30 ELSE 40')
+    interp.store_line(20, 'RESTORE 30')
+    interp.store_line(30, 'DATA 1')
+    interp.store_line(40, 'END')
+    interp.renum(100, 10)
+    prog = dict(interp.list_lines())
+    check("renum remaps THEN and ELSE", prog.get(100),
+          'IF A = 1 THEN 120 ELSE 130')
+    check("renum remaps RESTORE", prog.get(110), 'RESTORE 120')
 
 
 def test_store_uppercases_code():
@@ -1303,7 +1405,9 @@ def main():
         test_multi_statement_data_unaffected,
         test_direct_multi_statement, test_direct_if_then_multi,
         test_direct_for_next_no_loop,
-        test_string_funcs, test_hex, test_hex_literal_error,
+        test_string_funcs, test_string_funcs_edge,
+        test_round_half_away_from_zero, test_numeric_array_rejects_string,
+        test_hex, test_hex_literal_error,
         test_hex_renum_roundtrip, test_arg_count_error,
         test_array, test_array_2d, test_gosub, test_data_read,
         test_data_signed_values, test_data_unquoted_is_error,
@@ -1322,9 +1426,11 @@ def main():
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
         test_session_run_frame_yields, test_break_stops_sound,
+        test_inkey_flush_on_run, test_break_during_input_wait,
+        test_direct_error_resets_state,
         test_direct_graphics_immediate,
         test_mod_fraction,
-        test_renum, test_renum_keeps_rem,
+        test_renum, test_renum_keeps_rem, test_renum_else_restore,
         test_store_uppercases_code,
         test_runtime_input_state, test_runtime_command_queue_order,
         test_runtime_command_queue_backpressure,

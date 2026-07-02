@@ -74,11 +74,14 @@ FUNCTION_HANDLERS = {
 }
 
 # Single-argument math functions: keyword -> callable applied to one number.
+# ROUND rounds half away from zero (classic BASIC rounding), not Python's
+# banker's rounding: ROUND(0.5) = 1, ROUND(-0.5) = -1.
 MATH1 = {
     "SIN": math.sin, "COS": math.cos, "TAN": math.tan, "ATN": math.atan,
     "RAD": math.radians, "DEG": math.degrees,
     "EXP": math.exp, "LOG": math.log, "LOG10": math.log10, "SQR": math.sqrt,
-    "ABS": abs, "INT": math.floor, "FIX": math.trunc, "ROUND": round,
+    "ABS": abs, "INT": math.floor, "FIX": math.trunc,
+    "ROUND": lambda v: int(math.copysign(math.floor(abs(v) + 0.5), v)),
     "SGN": lambda v: (v > 0) - (v < 0),
 }
 

@@ -25,11 +25,6 @@ import threading
 
 from .keywords import STICK_BITS, BUTTON_KEYS
 
-# Bounded queue capacity. Deliberately small to evoke a retro BASIC drawing
-# pace: a loop that emits more than this many screen commands per iteration is
-# spread across several display frames. Tune freely.
-QUEUE_CAPACITY = 4
-
 # Default graphics command queue capacity. Large enough to act as a plain
 # thread-safe channel; execution pace is set by the VM throttle, not this.
 GFX_QUEUE_CAPACITY = 1024
@@ -160,11 +155,16 @@ class KeyState:
     def inkey(self):
         return self._chars.popleft() if self._chars else ""
 
+    def clear_chars(self):
+        """Drop the typeahead buffer (called at RUN start, so the command line
+        just typed - e.g. "RUN" - does not leak into the program's INKEY$)."""
+        self._chars.clear()
+
 
 class CommandQueue:
     """Bounded, thread-safe queue of (method_name, args) screen commands."""
 
-    def __init__(self, capacity=QUEUE_CAPACITY):
+    def __init__(self, capacity=GFX_QUEUE_CAPACITY):
         self.capacity = capacity
         self._dq = collections.deque()
         self._cond = threading.Condition()

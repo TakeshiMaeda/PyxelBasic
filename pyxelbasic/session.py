@@ -253,6 +253,7 @@ class Session:
         while not self._stop:
             t0 = time.perf_counter()
             self._poll_input()
+            self.poll_break()
             if self.mode == "RUN":
                 self._run_cycle()
             self.screen.publish()
@@ -263,6 +264,17 @@ class Session:
 
     def request_break(self):
         self._break = True
+
+    def poll_break(self):
+        """Apply a pending BREAK while waiting at an INPUT prompt.
+
+        _run_cycle / run_frame consume the break flag while the program runs,
+        but neither is entered in INPUT mode; without this, Ctrl+C during an
+        INPUT wait would sit pending until the input is submitted. Called every
+        cycle/frame by both execution modes."""
+        if self._break and self.mode == "INPUT":
+            self._break = False
+            self._do_break()
 
     def request_stop(self):
         self._stop = True
@@ -405,6 +417,9 @@ class Session:
     def _start_run(self):
         self.interp.prepare_run()       # may raise BasicError
         self._break = False
+        # Flush the typeahead so the command line just typed (e.g. "RUN") does
+        # not leak into the program's INKEY$.
+        self.keys.clear_chars()
         self.mode = "RUN"
 
     def _finish_run(self, st):
@@ -445,6 +460,7 @@ class Session:
         try:
             self._direct_command(s)
         except BasicError as e:
+            self.interp.state = "EDIT"
             self.screen.print_line("?ERROR %d: %s" % (int(e.code), e))
         except Exception as e:
             # Safety net for direct commands too: report instead of crashing.

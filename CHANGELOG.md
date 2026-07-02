@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.5
+- Flush the typeahead buffer when a run starts (the just-typed `RUN` used to leak into `INKEY$`)
+- `RENUM` now also updates the line numbers after `ELSE` (an implicit GOTO) and `RESTORE`
+- `Ctrl+C` now interrupts a program waiting at an `INPUT` prompt
+- Fixed `LEFT$` / `MID$` returning wrong results for a count of 0 or less, or a start below 1
+- Assigning a string to a numeric array element is now an error
+- `ROUND` now rounds a .5 fraction away from zero
+- Fixed keys released while the quit dialog is open staying "held" afterwards
+
 ## 0.1.4
 - Added sound: `PLAY` to play MML on Pyxel's 4 channels
 - Added the `PLAY(ch)` function returning whether a channel is playing

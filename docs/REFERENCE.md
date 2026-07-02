@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.4
+- Target version: v0.1.5
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -44,8 +44,9 @@ PyxelBasic is a line-numbered, classic-style BASIC interpreter that runs on Pyxe
 ## 2. Startup and Screen
 
 ```
-python main.py            start normally (edit mode)
-python main.py hello      load samples/hello.bas on startup
+python main.py                 start normally (edit mode)
+python main.py hello           load samples/hello.bas on startup
+python main.py --workdir DIR   set the SAVE/LOAD directory (default: samples/)
 ```
 
 - Screen size: 256 x 256 pixels, 60 FPS.
@@ -164,11 +165,11 @@ Management commands entered at the prompt without a line number.
 | `RENUM` | Renumber lines starting at 10 in steps of 10 |
 | `RENUM start` | Renumber from `start` in steps of 10 |
 | `RENUM start,step` | Renumber from `start` in steps of `step` |
-| `SAVE "name"` | Save to `samples/name.bas` |
-| `LOAD "name"` | Load `samples/name.bas` (discards the current program) |
+| `SAVE "name"` | Save `name.bas` to the working directory |
+| `LOAD "name"` | Load `name.bas` from the working directory (discards the current program) |
 
-- `RENUM` also updates line numbers that appear right after `GOTO` / `GOSUB` / `THEN`.
-- If the `SAVE` / `LOAD` file name has no extension, `.bas` is appended. Files are stored in the `samples/` directory.
+- `RENUM` also updates line numbers that appear right after `GOTO` / `GOSUB` / `THEN` / `ELSE` (an implicit-GOTO target) / `RESTORE`.
+- If the `SAVE` / `LOAD` file name has no extension, `.bas` is appended. The working directory defaults to `samples/`; the startup option `--workdir DIR` changes it (it cannot be changed from inside the interpreter).
 - Other statements (`PRINT`, assignments, etc.) can also be executed directly at the prompt.
 
 ---
@@ -523,9 +524,9 @@ Ends program execution.
 | Function | Returns |
 |---|---|
 | `LEN(s)` | Length of string s |
-| `LEFT$(s, n)` | Leftmost n characters of s |
+| `LEFT$(s, n)` | Leftmost n characters of s (empty if n ≤ 0) |
 | `RIGHT$(s, n)` | Rightmost n characters of s (empty if n ≤ 0) |
-| `MID$(s, start [, len])` | len characters from position start (**1-based**) in s. To the end if len omitted |
+| `MID$(s, start [, len])` | len characters from position start (**1-based**; a start below 1 is treated as 1) in s (empty if len ≤ 0). To the end if len omitted |
 | `CHR$(n)` | Character for character code n |
 | `ASC(s)` | Character code of the first character of s (0 if empty) |
 | `STR$(n)` | Stringified number n |
@@ -547,7 +548,7 @@ Ends program execution.
 | `SGN(n)` | Sign (1 if n>0, 0 if n=0, -1 if n<0) |
 | `INT(n)` | Largest integer ≤ n (floor, toward negative) |
 | `FIX(n)` | Truncates the fractional part (toward zero) |
-| `ROUND(n)` | Rounds to the nearest integer |
+| `ROUND(n)` | Rounds to the nearest integer (a .5 fraction rounds away from zero) |
 | `SIN(n)` `COS(n)` `TAN(n)` | Trigonometric functions (radians) |
 | `ATN(n)` | Arctangent |
 | `RAD(n)` | Degrees → radians |
@@ -642,7 +643,7 @@ In main mode the Pyxel main loop runs up to `--steps-per-frame` statements each 
 **How frame breaks work**
 
 - Executing (a statement) or evaluating (a function) a frame-break keyword breaks the frame there (after that statement/function has run).
-- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `STICK` `BUTTON`**.
+- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `CIRCLE` `CIRCLEBF` `STICK` `BUTTON` `PUT`**.
 - The set of targets can be changed at runtime with the `VSYNC` command.
 
 **VSYNC command**
@@ -813,7 +814,6 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 ## 14. Planned Features
 
 - More graphics statements
-- Sound statements
 - Other features
 
 ---

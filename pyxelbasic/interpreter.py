@@ -432,7 +432,8 @@ class Evaluator:
         return len(basic_str(args[0]))
 
     def _fn_left(self, args):
-        return basic_str(args[0])[:int(self._num(args[1]))]
+        k = int(self._num(args[1]))
+        return basic_str(args[0])[:k] if k > 0 else ""
 
     def _fn_right(self, args):
         k = int(self._num(args[1]))
@@ -440,10 +441,11 @@ class Evaluator:
 
     def _fn_mid(self, args):
         s = basic_str(args[0])
-        start = int(self._num(args[1])) - 1  # 1-based
+        # 1-based; a start below 1 is treated as 1 (never a Python negative index).
+        start = max(int(self._num(args[1])), 1) - 1
         if len(args) >= 3:
             length = int(self._num(args[2]))
-            return s[start:start + length]
+            return s[start:start + length] if length > 0 else ""
         return s[start:]
 
     def _fn_chr(self, args):
@@ -573,7 +575,8 @@ class Interpreter:
         for ln in old:
             mapping[ln] = new_no
             new_no += step
-        # Renumber the line numbers referenced by GOTO / GOSUB / THEN
+        # Renumber the line numbers referenced by GOTO / GOSUB / THEN / ELSE /
+        # RESTORE (a number right after ELSE is an implicit GOTO target)
         new_prog = {}
         for ln in old:
             new_prog[mapping[ln]] = self._renum_refs(self.program[ln], mapping)
@@ -586,7 +589,8 @@ class Interpreter:
         # other line is kept verbatim. This preserves REM comments (tokenize()
         # drops the comment text, so round-tripping them through detokenize would
         # blank the line) and the original formatting of plain statements.
-        refkw = (("KW", "GOTO"), ("KW", "GOSUB"), ("KW", "THEN"))
+        refkw = (("KW", "GOTO"), ("KW", "GOSUB"), ("KW", "THEN"),
+                 ("KW", "ELSE"), ("KW", "RESTORE"))
         if not any(t in refkw for t in toks):
             return text
         out = []
@@ -594,7 +598,7 @@ class Interpreter:
         while i < len(toks):
             kind, val = toks[i]
             out.append((kind, val))
-            if (kind, val) in (("KW", "GOTO"), ("KW", "GOSUB"), ("KW", "THEN")):
+            if (kind, val) in refkw:
                 if i + 1 < len(toks) and toks[i + 1][0] == "NUM":
                     target = toks[i + 1][1]
                     out.append(("NUM", mapping.get(target, target)))
@@ -727,6 +731,8 @@ class Interpreter:
     def set_array(self, name, indices, value):
         if name.endswith("$") and not isinstance(value, str):
             value = basic_str(value)
+        if not name.endswith("$") and isinstance(value, str):
+            raise BasicError(Err.STRING_TO_NUMERIC, name)
         size, data = self._ensure_array(name, [int(i) for i in indices])
         _nd_set(data, size, [int(i) for i in indices], value, name)
 
