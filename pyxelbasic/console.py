@@ -76,6 +76,9 @@ class PyxelGraphicsSurface:
     def tri(self, x1, y1, x2, y2, x3, y3, col):
         self.img.tri(x1, y1, x2, y2, x3, y3, col)
 
+    def trib(self, x1, y1, x2, y2, x3, y3, col):
+        self.img.trib(x1, y1, x2, y2, x3, y3, col)
+
 
 class PyxelSpritePlane:
     """Sprite plane: composes the sprite display table over the screen.

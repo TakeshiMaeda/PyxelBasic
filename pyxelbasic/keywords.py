@@ -37,6 +37,8 @@ STATEMENT_HANDLERS = {
     "LINE":      "_do_line",
     "LINEB":     "_do_lineb",
     "LINEBF":    "_do_linebf",
+    "TRI":       "_do_tri",
+    "TRIF":      "_do_trif",
     "CIRCLE":    "_do_circle",
     "CIRCLEBF":  "_do_circlebf",
     "END":       "_do_end",
@@ -130,6 +132,7 @@ FRAME_BREAK = {
     "PRINT",            # screen output
     "PSET", "LINE",     # drawing statements
     "LINEB", "LINEBF",  # rectangle drawing
+    "TRI", "TRIF",      # triangle drawing
     "CIRCLE", "CIRCLEBF",  # circle / ellipse drawing
     "STICK", "BUTTON",  # input polling (functions)
     "PUT",              # PUT SPRITE updates the display table each game-loop frame

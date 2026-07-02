@@ -1112,6 +1112,35 @@ class Interpreter:
         x1, y1, x2, y2, col = self._parse_line_coords(toks)
         self.io.rect(x1, y1, x2, y2, col)
 
+    def _parse_tri_coords(self, toks):
+        ev = Evaluator(toks, self, 1)
+        p1 = ev.parse_arglist()
+        if ev.peek() != ("OP", "-"):
+            raise BasicError(Err.INVALID_LINE_SYNTAX)
+        ev.advance()
+        p2 = ev.parse_arglist()
+        if ev.peek() != ("OP", "-"):
+            raise BasicError(Err.INVALID_LINE_SYNTAX)
+        ev.advance()
+        p3 = ev.parse_arglist()
+        col = None
+        if ev.peek()[0] == "COMMA":
+            ev.advance()
+            col = int(ev.parse())
+        if len(p1) != 2 or len(p2) != 2 or len(p3) != 2:
+            raise BasicError(Err.SYNTAX_ERROR)
+        return int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1]), int(p3[0]), int(p3[1]), col
+
+    def _do_tri(self, toks):
+        # TRI(x1,y1)-(x2,y2)-(x3,y3)[,col] : outline triangle
+        x1, y1, x2, y2, x3, y3, col = self._parse_tri_coords(toks)
+        self.io.trib(x1, y1, x2, y2, x3, y3, col)
+
+    def _do_trif(self, toks):
+        # TRIF(x1,y1)-(x2,y2)-(x3,y3)[,col] : filled triangle
+        x1, y1, x2, y2, x3, y3, col = self._parse_tri_coords(toks)
+        self.io.tri(x1, y1, x2, y2, x3, y3, col)
+
     def _parse_circle_args(self, toks):
         # CIRCLE(x,y),r,col[,start][,end][,ratio]
         # Returns (x, y, r, col, start, end, ratio); omitted optionals are None.

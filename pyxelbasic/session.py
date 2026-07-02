@@ -40,7 +40,7 @@ CYCLE_PERIOD = 0.064   # seconds; <= 0 disables the throttle (run free)
 
 # Main-driven mode: statements executed per Pyxel frame (the classic cooperative
 # pacing). Higher is faster but less responsive. Used only when exec_mode="main".
-STEPS_PER_FRAME = 800
+STEPS_PER_FRAME = 8000
 
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
 
