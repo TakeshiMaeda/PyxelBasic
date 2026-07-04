@@ -87,6 +87,9 @@ class MockIO:
     def tri(self, x1, y1, x2, y2, x3, y3, col=None):
         self.gfx.append(("tri", x1, y1, x2, y2, x3, y3, col))
 
+    def trif(self, x1, y1, x2, y2, x3, y3, col=None):
+        self.gfx.append(("trif", x1, y1, x2, y2, x3, y3, col))
+
     def point(self, x, y):
         return self.pixels.get((x, y), 0)
 
@@ -640,13 +643,22 @@ def test_lineb():
     check("linebf cmd", io.gfx[1], ("rect", 0, 0, 20, 20, 9))
 
 
+def test_tri():
+    io, _ = run_program([
+        (10, 'TRI (10,10)-(60,40)-(30,50), 8'),
+        (20, 'TRIF (0,0)-(20,0)-(10,20), 9'),
+    ])
+    check("tri cmd", io.gfx[0], ("tri", 10, 10, 60, 40, 30, 50, 8))
+    check("trif cmd", io.gfx[1], ("trif", 0, 0, 20, 0, 10, 20, 9))
+
+
 def test_circle_full():
     io, _ = run_program([
         (10, 'CIRCLE (80,80), 10, 11'),
-        (20, 'CIRCLEBF (40,40), 8, 12'),
+        (20, 'CIRCLEF (40,40), 8, 12'),
     ])
     check("circle outline = ellib", io.gfx[0], ("ellib", 80, 80, 10, 10, 11))
-    check("circlebf fill = elli", io.gfx[1], ("elli", 40, 40, 8, 8, 12))
+    check("circlef fill = elli", io.gfx[1], ("elli", 40, 40, 8, 8, 12))
 
 
 def test_circle_ratio():
@@ -1360,7 +1372,7 @@ def test_dispatch_registration():
     expected_statements = {
         "PRINT", "INPUT", "LET", "GOTO", "GOSUB", "RETURN", "IF",
         "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
-        "PSET", "LINE", "LINEB", "LINEBF", "CIRCLE", "CIRCLEBF",
+        "PSET", "LINE", "LINEB", "LINEBF", "TRI", "TRIF", "CIRCLE", "CIRCLEF",
         "END", "STOP", "DATA", "READ", "RESTORE",
         "RANDOMIZE", "VSYNC", "SET", "PUT", "PLAY",
     }
@@ -1414,7 +1426,7 @@ def main():
         test_read_into_array,
         test_restore_line, test_restore_line_not_data,
         test_input, test_logical, test_graphics,
-        test_cls_args, test_cls_mask_range, test_list_range, test_lineb,
+        test_cls_args, test_cls_mask_range, test_list_range, test_lineb, test_tri,
         test_circle_full, test_circle_ratio, test_circle_arc, test_point,
         test_set_sprite, test_set_sprite_errors,
         test_put_sprite, test_put_sprite_off, test_put_sprite_errors,

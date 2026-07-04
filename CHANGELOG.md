@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.6
+- Added `TRI` / `TRIF` to draw a triangle / filled triangle
+- Renamed the filled-circle statement `CIRCLEBF` to `CIRCLEF` (filled shapes now use the `F` suffix)
+- Added a 3D cube puzzle sample `puzzle.bas`
+- Added a 3D wireframe cube sample `cube.bas`
+- Changed the default cap on statements run per frame in main mode (`--steps-per-frame`) from 800 to 8000
+
+### Thanks
+
+- Thanks to @harukaappscreate for contributing the original `TRI` / `TRIF` implementation and the 3D puzzle sample (PR #1)
+- Thanks to @yukizokin (X) for contributing the 3D wireframe cube sample `cube.bas`
+
 ## 0.1.5
 - Flush the typeahead buffer when a run starts (the just-typed `RUN` used to leak into `INKEY$`)
 - `RENUM` now also updates the line numbers after `ELSE` (an implicit GOTO) and `RESTORE`

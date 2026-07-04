@@ -153,6 +153,10 @@ class SessionIO:
         c = self.screen.color if col is None else col
         self.gfx.put(("tri", (x1, y1, x2, y2, x3, y3, c)))
 
+    def trif(self, x1, y1, x2, y2, x3, y3, col=None):
+        c = self.screen.color if col is None else col
+        self.gfx.put(("trif", (x1, y1, x2, y2, x3, y3, c)))
+
     def point(self, x, y):
         # Read back a pixel via the graphics target. The Pyxel image is only
         # touchable on the main thread, so in threaded mode this round-trips

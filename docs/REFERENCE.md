@@ -434,19 +434,26 @@ LINEBF (X1, Y1)-(X2, Y2) [, color]
 ```
 `LINEB` draws a rectangle outline and `LINEBF` draws a filled rectangle, using the two points as opposite corners. If the color is omitted, the current `COLOR` color is used.
 
-### CIRCLE / CIRCLEBF
+### TRI / TRIF
 ```
-CIRCLE   (X, Y), radius, color [, start] [, end] [, ratio]
-CIRCLEBF (X, Y), radius, color [, start] [, end] [, ratio]
+TRI  (X1, Y1)-(X2, Y2)-(X3, Y3) [, color]
+TRIF (X1, Y1)-(X2, Y2)-(X3, Y3) [, color]
 ```
-`CIRCLE` draws a circle/ellipse outline and `CIRCLEBF` draws a filled one. `color` is required.
+`TRI` draws a triangle outline and `TRIF` draws a filled triangle, using the three points as vertices. If the color is omitted, the current `COLOR` color is used.
+
+### CIRCLE / CIRCLEF
+```
+CIRCLE  (X, Y), radius, color [, start] [, end] [, ratio]
+CIRCLEF (X, Y), radius, color [, start] [, end] [, ratio]
+```
+`CIRCLE` draws a circle/ellipse outline and `CIRCLEF` draws a filled one. `color` is required.
 
 - `ratio` is the aspect ratio (vertical radius / horizontal radius); default 1.
   - `ratio = 1`: a circle (both radii equal `radius`).
   - `ratio > 1`: a tall ellipse (vertical `radius`, horizontal `radius / ratio`).
   - `ratio < 1`: a wide ellipse (horizontal `radius`, vertical `radius * ratio`).
   - `radius` is always the longer (major) semi-axis (MSX-BASIC convention).
-- `start` / `end` are arc angles in radians, measured from the 3 o'clock direction and going **counterclockwise** (MSX-BASIC convention). When given, only the arc from `start` to `end` is drawn; for `CIRCLEBF` the arc is filled as a pie wedge. Omitting both draws the full shape. Omitting only one fills in 0 (start) or 2π (end).
+- `start` / `end` are arc angles in radians, measured from the 3 o'clock direction and going **counterclockwise** (MSX-BASIC convention). When given, only the arc from `start` to `end` is drawn; for `CIRCLEF` the arc is filled as a pie wedge. Omitting both draws the full shape. Omitting only one fills in 0 (start) or 2π (end).
 
 To pass `ratio` without angles, leave the angle slots empty: `CIRCLE (X, Y), R, C, , , 1.5`.
 
@@ -631,7 +638,7 @@ PyxelBasic lets you switch the execution model with the startup option `--exec-m
 | | main mode (default) | thread mode |
 |---|---|---|
 | Execution | The Pyxel main loop drives the VM each frame | The VM runs sequentially on a separate thread |
-| Statements per frame/cycle | `--steps-per-frame` (default 800) | `--vm-cycle-steps` (default 400) |
+| Statements per frame/cycle | `--steps-per-frame` (default 8000) | `--vm-cycle-steps` (default 400) |
 | Pacing | Pyxel's 60 FPS sets the cadence | A compensated throttle (sleep) |
 | VSYNC | Active (frame breaks; see 10.1) | No-op (see 10.2) |
 | Graphics | Drawn immediately | Through a command queue |
@@ -640,10 +647,12 @@ PyxelBasic lets you switch the execution model with the startup option `--exec-m
 
 In main mode the Pyxel main loop runs up to `--steps-per-frame` statements each frame. When it reaches a designated statement/function, it ends execution for that frame and continues on the next, so screen updates and input are not missed.
 
+`--steps-per-frame` is a cap; a normal program that passes through frame-break statements never uses it up. A program that removes the breaks (e.g. with `VSYNC CLEAR`) and keeps computing up to the cap can push a frame's processing time past the 60 FPS budget and lower the frame rate.
+
 **How frame breaks work**
 
 - Executing (a statement) or evaluating (a function) a frame-break keyword breaks the frame there (after that statement/function has run).
-- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `CIRCLE` `CIRCLEBF` `STICK` `BUTTON` `PUT`**.
+- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `TRI` `TRIF` `CIRCLE` `CIRCLEF` `STICK` `BUTTON` `PUT`**.
 - The set of targets can be changed at runtime with the `VSYNC` command.
 
 **VSYNC command**
@@ -706,7 +715,7 @@ VSYNC in thread mode (a backward-compatible no-op):
 
 ### 11.2 Graphics
 
-- Drawing statements: `PSET`, `LINE`, `LINEB`, `LINEBF`, `CIRCLE`, `CIRCLEBF`.
+- Drawing statements: `PSET`, `LINE`, `LINEB`, `LINEBF`, `TRI`, `TRIF`, `CIRCLE`, `CIRCLEF`.
 - Reading: `POINT(x, y)` returns the color at a pixel.
 - Graphics are drawn to a dedicated layer and retained until `CLS` (no need to re-run every frame).
 
@@ -775,13 +784,13 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 112 | `Expected TO in FOR` | Syntax error in a `FOR` |
 | 113 | `Invalid DIM syntax` | Syntax error in a `DIM` |
 | 114 | `Invalid LOCATE syntax` | Syntax error in a `LOCATE` |
-| 115 | `Invalid LINE syntax ('-' required)` | Syntax error in a `LINE` |
+| 115 | `Invalid LINE syntax ('-' required)` | Syntax error in a `LINE` / `TRI` / `TRIF` |
 | 116 | `VSYNC: keyword required` | A `VSYNC` frame-break setting in main mode is missing the keyword (cannot occur in thread mode, where VSYNC is a no-op) |
 | 117 | `VSYNC: ON or OFF required` | `VSYNC <word>` in main mode is missing `ON`/`OFF` (same as above) |
 | 118 | `Unterminated string` | A `"` is not closed |
 | 119 | `Invalid character: 'x'` | An uninterpretable character |
 | 120 | `Invalid comparison operator` | Internal: bad comparison operator |
-| 121 | `Invalid CIRCLE syntax` | Syntax error in a `CIRCLE` / `CIRCLEBF` (e.g. a missing radius or color) |
+| 121 | `Invalid CIRCLE syntax` | Syntax error in a `CIRCLE` / `CIRCLEF` (e.g. a missing radius or color) |
 | 122 | `Invalid hex literal` | An `&H` prefix is not followed by any hex digit |
 | 123 | `Wrong number of arguments: name` | A function was called with too few or too many arguments |
 | 124 | `Invalid SPRITE syntax` | Malformed `SET SPRITE` / `PUT SPRITE` (e.g. missing `SPRITE`, or extra tokens after `OFF`) |

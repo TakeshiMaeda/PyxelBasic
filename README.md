@@ -8,7 +8,8 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.5.
+> This is version 0.1.6.
+> v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features
 
@@ -65,7 +66,7 @@ Options:
   mode the Pyxel main loop drives the VM each frame and `VSYNC` is active; in
   thread mode the VM runs on a separate thread and `VSYNC` is a no-op. See
   "Execution Pacing and VSYNC" in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
-- `--steps-per-frame N` (main mode) statements run per frame (default 800).
+- `--steps-per-frame N` (main mode) cap on statements run per frame (default 8000).
 - `--gfx-queue-size N` (thread mode) capacity of the graphics command queue (default 1024).
 - `--vm-cycle-steps N` / `--vm-cycle-ms MS` (thread mode) tune the BASIC VM's
   execution pace (statements per cycle / target cycle period in ms). See
@@ -106,6 +107,8 @@ RUN
 | `samples/brickbreaker.bas` | Block breaker |
 | `samples/jumpman.bas` | Climb terrain with gravity and jumping (SET/PUT SPRITE, PLAY) |
 | `samples/fireworks.bas` | Fireworks display |
+| `samples/cube.bas` | Rotating 3D wireframe cube |
+| `samples/puzzle.bas` | Rotating 3D cube puzzle with auto scramble / solve (requires `--exec-mode main`, the default) |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |
 
 Example of loading and running:
@@ -123,7 +126,7 @@ For the **complete reference** of implemented statements, functions, and operato
 
 Main elements:
 
-- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - Operators: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
@@ -172,6 +175,13 @@ This covers lexing, expression evaluation, control structures, arrays, string fu
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
+## Contributors
+
+PyxelBasic is developed as a personal project, but it also includes contributions from others.
+
+- [@harukaappscreate](https://github.com/harukaappscreate) — `TRI` / `TRIF` statements and 3D puzzle sample
+- [@yukizokin](https://x.com/yukizokin) (X) — 3D wireframe cube sample
 
 ## License
 

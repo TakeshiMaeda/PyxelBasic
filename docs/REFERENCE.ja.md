@@ -420,19 +420,26 @@ LINEBF (X1, Y1)-(X2, Y2) [, 色番号]
 ```
 2 点を対角とする矩形を描く。`LINEB` は輪郭、`LINEBF` は塗りつぶし。色を省略すると現在の `COLOR` 色を使う。
 
-### CIRCLE / CIRCLEBF
+### TRI / TRIF
 ```
-CIRCLE   (X, Y), 半径, 色番号 [, 開始角度] [, 終了角度] [, 比率]
-CIRCLEBF (X, Y), 半径, 色番号 [, 開始角度] [, 終了角度] [, 比率]
+TRI  (X1, Y1)-(X2, Y2)-(X3, Y3) [, 色番号]
+TRIF (X1, Y1)-(X2, Y2)-(X3, Y3) [, 色番号]
 ```
-円／楕円を描く。`CIRCLE` は輪郭、`CIRCLEBF` は塗りつぶし。`色番号` は必須。
+3 点を頂点とする三角形を描く。`TRI` は輪郭、`TRIF` は塗りつぶし。色を省略すると現在の `COLOR` 色を使う。
+
+### CIRCLE / CIRCLEF
+```
+CIRCLE  (X, Y), 半径, 色番号 [, 開始角度] [, 終了角度] [, 比率]
+CIRCLEF (X, Y), 半径, 色番号 [, 開始角度] [, 終了角度] [, 比率]
+```
+円／楕円を描く。`CIRCLE` は輪郭、`CIRCLEF` は塗りつぶし。`色番号` は必須。
 
 - `比率` は縦横比（縦の半径 / 横の半径）。省略時は 1。
   - `比率 = 1`：円（縦横とも半径）。
   - `比率 > 1`：縦長の楕円（縦=半径、横=半径 / 比率）。
   - `比率 < 1`：横長の楕円（横=半径、縦=半径 * 比率）。
   - `半径` は常に長い方（長軸）の半径になる（MSX-BASIC 方式）。
-- `開始角度` / `終了角度` はラジアン。3 時方向を起点に**反時計回り**で測る（MSX-BASIC 方式）。指定すると開始角度から終了角度までの円弧のみを描く。`CIRCLEBF` では扇形（パイ）として塗りつぶす。両方省略で全体を描画。片方のみ省略時は 0（開始）または 2π（終了）を補う。
+- `開始角度` / `終了角度` はラジアン。3 時方向を起点に**反時計回り**で測る（MSX-BASIC 方式）。指定すると開始角度から終了角度までの円弧のみを描く。`CIRCLEF` では扇形（パイ）として塗りつぶす。両方省略で全体を描画。片方のみ省略時は 0（開始）または 2π（終了）を補う。
 - 角度を省略して `比率` だけ渡すには角度スロットを空にする：`CIRCLE (X, Y), R, C, , , 1.5`。
 
 ### RANDOMIZE
@@ -616,7 +623,7 @@ PyxelBasic は実行モデルを起動引数 `--exec-mode {main,thread}` で切�
 | | main モード（既定） | thread モード |
 |---|---|---|
 | 実行 | Pyxel のメインループが毎フレーム VM を駆動 | VM を別スレッドで逐次実行 |
-| 1 フレーム/サイクルの実行量 | `--steps-per-frame`（既定 800） | `--vm-cycle-steps`（既定 400） |
+| 1 フレーム/サイクルの実行量 | `--steps-per-frame`（既定 8000） | `--vm-cycle-steps`（既定 400） |
 | ペーシング | Pyxel の 60 FPS が刻む | 補償付きスロットル（sleep） |
 | VSYNC | 有効（フレーム区切り。10.1） | no-op（10.2） |
 | グラフィック | 即時描画 | コマンドキュー経由 |
@@ -625,10 +632,12 @@ PyxelBasic は実行モデルを起動引数 `--exec-mode {main,thread}` で切�
 
 main モードでは Pyxel のメインループが毎フレーム最大 `--steps-per-frame` 命令を実行する。指定した命令・関数に達した時点で「そのフレームの実行を打ち切り、次フレームへ継続する」ことで、画面更新や入力の取りこぼしを防ぐ。
 
+`--steps-per-frame` は上限であり、フレーム区切り対象の命令を通る通常のプログラムはそこまで使い切らない。`VSYNC CLEAR` などで区切りを外して上限まで計算し続けるプログラムでは、1 フレームの処理時間が 60 FPS の枠を超えてフレームレートが低下することがある。
+
 **フレーム区切りの仕組み**
 
 - フレーム区切り対象の予約語を実行（命令）または評価（関数）すると、その**処理後**にフレームが区切られる。
-- 初期状態で区切り対象になっている予約語: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `CIRCLE` `CIRCLEBF` `STICK` `BUTTON` `PUT`**。
+- 初期状態で区切り対象になっている予約語: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `TRI` `TRIF` `CIRCLE` `CIRCLEF` `STICK` `BUTTON` `PUT`**。
 - 区切り対象は `VSYNC` コマンドで実行時に変更できる。
 
 **VSYNC コマンド**
@@ -691,7 +700,7 @@ thread モードの VSYNC（後方互換の no-op）:
 
 ### 11.2 グラフィック
 
-- 描画命令: `PSET`、`LINE`、`LINEB`、`LINEBF`、`CIRCLE`、`CIRCLEBF`。
+- 描画命令: `PSET`、`LINE`、`LINEB`、`LINEBF`、`TRI`、`TRIF`、`CIRCLE`、`CIRCLEF`。
 - 読み取り: `POINT(x, y)` で座標の色を取得する。
 - グラフィックは専用のレイヤーに描画され、`CLS` まで保持される（毎フレーム再実行不要）。
 
@@ -760,13 +769,13 @@ Text面       （PRINT・エディタ。最も手前）
 | 112 | `Expected TO in FOR` | `FOR` の構文エラー |
 | 113 | `Invalid DIM syntax` | `DIM` の構文エラー |
 | 114 | `Invalid LOCATE syntax` | `LOCATE` の構文エラー |
-| 115 | `Invalid LINE syntax ('-' required)` | `LINE` の構文エラー |
+| 115 | `Invalid LINE syntax ('-' required)` | `LINE` / `TRI` / `TRIF` の構文エラー |
 | 116 | `VSYNC: keyword required` | main モードで `VSYNC` のフレーム区切り設定に予約語がない（thread モードでは no-op のため発生しない） |
 | 117 | `VSYNC: ON or OFF required` | main モードで `VSYNC <語>` に `ON`/`OFF` がない（同上） |
 | 118 | `Unterminated string` | `"` が閉じていない |
 | 119 | `Invalid character: 'x'` | 解釈できない文字 |
 | 120 | `Invalid comparison operator` | 内部エラー（不正な比較演算子）|
-| 121 | `Invalid CIRCLE syntax` | `CIRCLE` / `CIRCLEBF` の構文エラー（半径や色の欠落など）|
+| 121 | `Invalid CIRCLE syntax` | `CIRCLE` / `CIRCLEF` の構文エラー（半径や色の欠落など）|
 | 122 | `Invalid hex literal` | `&H` 接頭辞の後に16進数字が無い |
 | 123 | `Wrong number of arguments: name` | 関数の引数が少なすぎる/多すぎる |
 | 124 | `Invalid SPRITE syntax` | `SET SPRITE` / `PUT SPRITE` の構文不正（`SPRITE` 欠落、`OFF` の後に余分なトークン等） |

@@ -1134,12 +1134,12 @@ class Interpreter:
     def _do_tri(self, toks):
         # TRI(x1,y1)-(x2,y2)-(x3,y3)[,col] : outline triangle
         x1, y1, x2, y2, x3, y3, col = self._parse_tri_coords(toks)
-        self.io.trib(x1, y1, x2, y2, x3, y3, col)
+        self.io.tri(x1, y1, x2, y2, x3, y3, col)
 
     def _do_trif(self, toks):
         # TRIF(x1,y1)-(x2,y2)-(x3,y3)[,col] : filled triangle
         x1, y1, x2, y2, x3, y3, col = self._parse_tri_coords(toks)
-        self.io.tri(x1, y1, x2, y2, x3, y3, col)
+        self.io.trif(x1, y1, x2, y2, x3, y3, col)
 
     def _parse_circle_args(self, toks):
         # CIRCLE(x,y),r,col[,start][,end][,ratio]
@@ -1187,7 +1187,7 @@ class Interpreter:
     def _do_circle(self, toks):
         self._draw_circle(toks, fill=False)
 
-    def _do_circlebf(self, toks):
+    def _do_circlef(self, toks):
         self._draw_circle(toks, fill=True)
 
     def _draw_circle(self, toks, fill):
@@ -1220,7 +1220,7 @@ class Interpreter:
             pts.append((px, py))
         if fill:
             for i in range(n):
-                self.io.tri(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], col)
+                self.io.trif(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], col)
         else:
             for i in range(n):
                 self.io.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], col)

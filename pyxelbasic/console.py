@@ -74,10 +74,12 @@ class PyxelGraphicsSurface:
         self.img.ellib(x - rx, y - ry, 2 * rx + 1, 2 * ry + 1, col)
 
     def tri(self, x1, y1, x2, y2, x3, y3, col):
-        self.img.tri(x1, y1, x2, y2, x3, y3, col)
-
-    def trib(self, x1, y1, x2, y2, x3, y3, col):
+        # Seam names follow the BASIC statements (tri = outline TRI,
+        # trif = filled TRIF), while Pyxel names them tri (fill) / trib (border).
         self.img.trib(x1, y1, x2, y2, x3, y3, col)
+
+    def trif(self, x1, y1, x2, y2, x3, y3, col):
+        self.img.tri(x1, y1, x2, y2, x3, y3, col)
 
 
 class PyxelSpritePlane:

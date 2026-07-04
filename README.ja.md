@@ -8,7 +8,8 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.5です。
+> 現在のバージョンはv0.1.6です。
+> v0.1.6 で塗りつぶし円の命令名を `CIRCLEBF` から `CIRCLEF` に変更しました。
 
 ## 特徴
 
@@ -62,7 +63,7 @@ python main.py --help               ヘルプを表示して終了
 - `--run` 読み込んだプログラムを自動実行する（`--load` が必要）。
 - `--showfps` 実フレームレートをウィンドウのタイトルバーに表示する。
 - `--exec-mode {main,thread}` 実行モデルの選択（既定 main）。main は Pyxel のメインループが毎フレーム VM を駆動し `VSYNC` が有効、thread は VM を別スレッドで実行し `VSYNC` は no-op。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
-- `--steps-per-frame N` main モードで 1 フレームに実行する命令数（既定 800）。
+- `--steps-per-frame N` main モードで 1 フレームに実行する命令数の上限（既定 8000）。
 - `--gfx-queue-size N`（thread モード）グラフィックコマンドキューの容量（既定 1024）。
 - `--vm-cycle-steps N` / `--vm-cycle-ms MS`（thread モード）BASIC VM の実行ペース調整（1 サイクルあたりの命令数 / サイクルの目標周期 ms）。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
 - `--debug-throttle`（thread モード）実行ペースの実測値（sleep 下限・実効レート）を起動時に標準エラーへ出力する。
@@ -99,6 +100,8 @@ RUN
 | `samples/brickbreaker.bas` | ブロック崩し |
 | `samples/jumpman.bas` | 重力とジャンプで地形を登るアクション（SET/PUT SPRITE・PLAY） |
 | `samples/fireworks.bas` | 花火を打ち上げる |
+| `samples/cube.bas` | 回転する 3D ワイヤーフレームキューブ |
+| `samples/puzzle.bas` | 回転する 3D キューブパズル。自動スクランブル／ソルブ付き（デフォルト動作の`--exec-mode main` 専用） |
 | `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト |
 
 読み込んで実行する例:
@@ -116,7 +119,7 @@ RUN
 
 主な要素:
 
-- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `CIRCLE`/`CIRCLEBF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - 演算子: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 
@@ -165,6 +168,13 @@ python tests/test_core.py
 ## 変更履歴
 
 リリース履歴は [CHANGELOG.ja.md](CHANGELOG.ja.md) を参照してください。
+
+## コントリビュータ
+
+PyxelBasic は個人プロジェクトとして開発していますが、外部からのコントリビュートも含まれています。
+
+- [@harukaappscreate](https://github.com/harukaappscreate) — `TRI` / `TRIF` 命令と 3D パズルサンプル
+- [@yukizokin](https://x.com/yukizokin)（X）— 3D ワイヤーフレームキューブのサンプル
 
 ## ライセンス
 
