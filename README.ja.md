@@ -100,7 +100,7 @@ RUN
 | `samples/brickbreaker.bas` | ブロック崩し |
 | `samples/jumpman.bas` | 重力とジャンプで地形を登るアクション（SET/PUT SPRITE・PLAY） |
 | `samples/fireworks.bas` | 花火を打ち上げる |
-| `samples/cube.bas` | 回転する 3D ワイヤーフレームキューブ |
+| `samples/cube.bas` | 回転する 3D ワイヤーフレームキューブ（デフォルト動作の`--exec-mode main` 専用） |
 | `samples/puzzle.bas` | 回転する 3D キューブパズル。自動スクランブル／ソルブ付き（デフォルト動作の`--exec-mode main` 専用） |
 | `samples/alltest.bas` | 全命令・関数を一通り動かすセルフテスト |
 
