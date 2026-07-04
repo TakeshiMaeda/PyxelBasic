@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+- Added the `FILES` command to list the `.bas` files in the working directory (`FILES "pattern"` filters the list)
+- Documented that file name casing follows the host filesystem
+
 ## 0.1.6
 - Added `TRI` / `TRIF` to draw a triangle / filled triangle
 - Renamed the filled-circle statement `CIRCLEBF` to `CIRCLEF` (filled shapes now use the `F` suffix)

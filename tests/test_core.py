@@ -7,6 +7,7 @@ Run:  python tests/test_core.py
 
 import os
 import sys
+import tempfile
 import threading
 import time
 
@@ -801,6 +802,28 @@ def test_session_run_frame_yields():
     check("session ends", s.mode, "EDIT")
 
 
+def test_files_command():
+    # FILES lists .bas files (extension stripped, names as the OS reports
+    # them, non-.bas files hidden); an optional "pattern" filters with * / ?.
+    with tempfile.TemporaryDirectory() as d:
+        for fn in ("beta.bas", "alpha.bas", "Gamma.bas", "note.txt"):
+            open(os.path.join(d, fn), "w").close()
+        s = Session(64, 42, DirectGraphics(_Recorder()), InputRing(), workdir=d)
+        s.screen.cls()               # drop the startup banner
+        s._direct_command("FILES")
+        rows = ["".join(r).rstrip() for r in s.screen.chars]
+        listing = [r for r in rows if r]
+        check("files one row fits", len(listing), 1)
+        check("files sorted, no extension, case kept",
+              listing[0].split(), ["alpha", "beta", "Gamma"])
+        check("files hides non-bas", "note" in listing[0], False)
+        s2 = Session(64, 42, DirectGraphics(_Recorder()), InputRing(), workdir=d)
+        s2.screen.cls()
+        s2._direct_command('FILES "al*"')
+        rows2 = ["".join(r).rstrip() for r in s2.screen.chars]
+        check("files pattern filters", [r for r in rows2 if r], ["alpha"])
+
+
 def test_break_stops_sound():
     # Ctrl+C (request_break) must abort the run AND stop all sound channels.
     rec = _Recorder()
@@ -1437,7 +1460,7 @@ def main():
         test_command_queue_pget,
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
-        test_session_run_frame_yields, test_break_stops_sound,
+        test_session_run_frame_yields, test_files_command, test_break_stops_sound,
         test_inkey_flush_on_run, test_break_during_input_wait,
         test_direct_error_resets_state,
         test_direct_graphics_immediate,

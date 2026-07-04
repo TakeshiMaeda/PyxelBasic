@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.6.
+> This is version 0.1.7.
 > v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features
@@ -90,7 +90,7 @@ RUN
 - A line entered with a line number is added to the program (re-enter the same number to overwrite; enter the number alone to delete).
 - Move the cursor freely with the arrow keys and edit in place: `Insert` toggles insert / overtype, `Home` / `End` jump to the start / end of the line, and `Backspace` / `Delete` remove characters. To fix an existing line, `LIST` it, move the cursor onto the line, change it, and press Enter.
 - `RUN` to execute, `LIST` to list, `NEW` to clear everything. Press `Ctrl+C` during a run to interrupt it and return to edit mode.
-- `SAVE "name"` / `LOAD "name"` save and load under the `samples/` directory.
+- `SAVE "name"` / `LOAD "name"` save and load under the `samples/` directory. `FILES` lists the files there.
 
 ## Samples
 

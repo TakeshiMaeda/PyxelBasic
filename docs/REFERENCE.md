@@ -167,9 +167,13 @@ Management commands entered at the prompt without a line number.
 | `RENUM start,step` | Renumber from `start` in steps of `step` |
 | `SAVE "name"` | Save `name.bas` to the working directory |
 | `LOAD "name"` | Load `name.bas` from the working directory (discards the current program) |
+| `FILES` | List the `.bas` files in the working directory |
+| `FILES "pattern"` | List only the matching files (`*` = any length, `?` = one character) |
 
 - `RENUM` also updates line numbers that appear right after `GOTO` / `GOSUB` / `THEN` / `ELSE` (an implicit-GOTO target) / `RESTORE`.
 - If the `SAVE` / `LOAD` file name has no extension, `.bas` is appended. The working directory defaults to `samples/`; the startup option `--workdir DIR` changes it (it cannot be changed from inside the interpreter).
+- File names are passed to the host filesystem exactly as typed, with no case normalization. Case sensitivity follows the platform: on Windows and macOS (by default) `LOAD "HELLO"` opens `hello.bas`, while on case-sensitive systems such as Linux it does not.
+- `FILES` lists the names without the `.bas` extension, exactly as the OS reports them, packed into as many columns as fit the screen width. Pattern matching also follows the host's case rules.
 - Other statements (`PRINT`, assignments, etc.) can also be executed directly at the prompt.
 
 ---

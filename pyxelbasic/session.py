@@ -12,6 +12,7 @@ graphics command queue (graphics); input is read from the key state, which the
 loop keeps fresh by draining the input ring every cycle.
 """
 
+import fnmatch
 import os
 import sys
 import time
@@ -494,6 +495,8 @@ class Session:
             self._cmd_save(toks)
         elif (kind, val) == ("KW", "LOAD"):
             self._cmd_load(toks)
+        elif (kind, val) == ("KW", "FILES"):
+            self._cmd_files(toks)
         else:
             # Direct execution (PRINT, assignments, ':'-separated statements).
             self.interp.state = "RUN"
@@ -527,6 +530,32 @@ class Session:
         if not name:
             raise BasicError(Err.LOAD_REQUIRES_NAME)
         self._load_file(name)
+
+    def _cmd_files(self, toks):
+        # FILES ["pattern"]: list the .bas files in the workdir, extension
+        # stripped, packed into columns that fit the screen width. Names are
+        # shown exactly as the OS reports them, and fnmatch follows the host
+        # filesystem's case rules - the same policy as SAVE/LOAD, which pass
+        # the typed name through untouched.
+        pattern = next((v for (k, v) in toks if k == "STR"), None)
+        try:
+            entries = os.listdir(self.workdir)
+        except OSError:
+            entries = []
+        names = sorted(
+            (e[:-4] for e in entries
+             if e.lower().endswith(".bas")
+             and os.path.isfile(os.path.join(self.workdir, e))),
+            key=str.lower)
+        if pattern is not None:
+            names = [n for n in names if fnmatch.fnmatch(n, pattern)]
+        if not names:
+            return
+        width = max(len(n) for n in names) + 2
+        per_row = max(1, self.screen.cols // width)
+        for i in range(0, len(names), per_row):
+            row = names[i:i + per_row]
+            self.screen.print_line("".join(n.ljust(width) for n in row).rstrip())
 
     def _load_file(self, name):
         path = self._resolve_path(name)

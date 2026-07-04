@@ -88,7 +88,7 @@ MATH1 = {
 }
 
 # Immediate (direct) mode commands (handled by App, not the interpreter core).
-DIRECT = {"RUN", "LIST", "NEW", "RENUM", "SAVE", "LOAD"}
+DIRECT = {"RUN", "LIST", "NEW", "RENUM", "SAVE", "LOAD", "FILES"}
 
 # Syntactic keywords (neither operators nor statements). SPRITE is the second
 # word of the SET SPRITE / PUT SPRITE statements; it is reserved so it tokenizes
