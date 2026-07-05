@@ -8,7 +8,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.7です。
+> 現在のバージョンはv0.1.7です。  
 > v0.1.6 で塗りつぶし円の命令名を `CIRCLEBF` から `CIRCLEF` に変更しました。
 
 ## 特徴
@@ -184,7 +184,7 @@ Copyright (c) 2025-2026 Takeshi Maeda (SPSoft)
 
 ## 謝辞
 
-本プロジェクトは [Pyxel](https://github.com/kitao/pyxel)（MIT License, © Takashi Kitao）上で動作します。
+本プロジェクトは [Pyxel](https://github.com/kitao/pyxel)（[MIT License](https://github.com/kitao/pyxel/blob/main/LICENSE)、© Takashi Kitao）上で動作します。
 素晴らしいレトロゲームエンジンを公開してくださっていることに感謝します。
 
 PyxelBasic は Pyxel を利用した**非公式**プロジェクトであり、Pyxel 本体およびその開発者とは関係ありません。

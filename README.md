@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.7.
+> This is version 0.1.7.  
 > v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features
@@ -191,7 +191,7 @@ Copyright (c) 2025-2026 Takeshi Maeda (SPSoft)
 
 ## Acknowledgments
 
-This project runs on [Pyxel](https://github.com/kitao/pyxel) (MIT License, © Takashi Kitao).
+This project runs on [Pyxel](https://github.com/kitao/pyxel) ([MIT License](https://github.com/kitao/pyxel/blob/main/LICENSE), © Takashi Kitao).
 Thank you for publishing such a wonderful retro game engine.
 
 PyxelBasic is an **unofficial** project that uses Pyxel and is not affiliated with Pyxel or its developer.
