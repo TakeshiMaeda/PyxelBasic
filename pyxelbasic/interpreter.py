@@ -543,6 +543,12 @@ class Interpreter:
         self._stmt_dispatch = {
             kw: getattr(self, name) for kw, name in STATEMENT_HANDLERS.items()
         }
+        # Internal pseudo-statements emitted by prepare_run's IF compilation.
+        # The "!" prefix can never come out of tokenize(), so these entries
+        # cannot clash with source code and are not reserved words.
+        self._stmt_dispatch["!IF"] = self._do_if_skip
+        self._stmt_dispatch["!SKIP"] = self._do_skip
+        self._stmt_dispatch["!EMPTY"] = self._do_empty_clause
         self._func_dispatch = {
             kw: (getattr(Evaluator, name), raw, lo, hi)
             for kw, (name, raw, lo, hi) in FUNCTION_HANDLERS.items()
@@ -636,7 +642,11 @@ class Interpreter:
         self.code = []
         # Flatten the program into one entry per statement. A line with ':' yields
         # several entries; the program counter is therefore statement-granular, so
-        # FOR/NEXT, GOSUB/RETURN and GOTO all work within a single line.
+        # FOR/NEXT, GOSUB/RETURN and GOTO all work within a single line. IF is
+        # compiled into pseudo-statement entries (see _compile_if_entries) so the
+        # statements inside a THEN/ELSE clause get pc addresses of their own -
+        # otherwise GOSUB's return address / FOR's loop point (both "pc + 1")
+        # would skip the rest of the clause and resume at the next line.
         for ln in sorted(self.program):
             toks = tokenize(self.program[ln])
             stmts = split_statements(toks)
@@ -644,7 +654,11 @@ class Interpreter:
                 # Keep empty / REM-only lines addressable (e.g. as a GOTO target).
                 stmts = [[]]
             for stmt in stmts:
-                self.code.append((ln, stmt))
+                if stmt and stmt[0] == ("KW", "IF"):
+                    for entry in self._compile_if_entries(stmt):
+                        self.code.append((ln, entry))
+                else:
+                    self.code.append((ln, stmt))
         # A line number maps to the index of its FIRST statement.
         self.line_index = {}
         for i, (ln, _) in enumerate(self.code):
@@ -653,6 +667,63 @@ class Interpreter:
         self._collect_data()
         self.pc = 0
         self.state = "RUN"
+
+    def _compile_if_entries(self, toks):
+        """Compile one IF statement into a list of addressable entries.
+
+        IF <cond> THEN <t1:..:tN> [ELSE <e1:..:eM>] becomes:
+
+            [!IF skip <cond>]   falsy: skip the then-part (and the !SKIP)
+            t1 .. tN            clause statements as ordinary entries
+            [!SKIP M]           only with ELSE: jump over the else-part
+            e1 .. eM
+
+        Each clause statement is a real self.code entry with its own pc, so
+        GOSUB return addresses and FOR loop points (both "pc + 1") work inside
+        THEN/ELSE clauses. Parsing mirrors _do_if exactly (flat first-THEN /
+        first-ELSE scan, implicit GOTO, lazily-reported empty clauses); a
+        missing THEN keeps the raw statement so _do_if raises when (and only
+        when) the line actually executes.
+        """
+        then_pos = None
+        for i, t in enumerate(toks):
+            if t == ("KW", "THEN"):
+                then_pos = i
+                break
+        if then_pos is None:
+            return [toks]
+        else_pos = None
+        for i in range(then_pos + 1, len(toks)):
+            if toks[i] == ("KW", "ELSE"):
+                else_pos = i
+                break
+        cond = toks[1:then_pos]
+        end = else_pos if else_pos is not None else len(toks)
+        then_part = self._compile_clause_entries(toks[then_pos + 1:end])
+        if else_pos is None:
+            head = [("KW", "!IF"), ("NUM", len(then_part))] + cond
+            return [head] + then_part
+        else_part = self._compile_clause_entries(toks[else_pos + 1:])
+        head = [("KW", "!IF"), ("NUM", len(then_part) + 1)] + cond
+        skip = [("KW", "!SKIP"), ("NUM", len(else_part))]
+        return [head] + then_part + [skip] + else_part
+
+    def _compile_clause_entries(self, clause):
+        """Compile a THEN/ELSE clause into a flat list of statement entries."""
+        if not clause:
+            # Selected-but-empty clause reports NOTHING_AFTER_THEN at run time,
+            # like _do_if (an untaken empty clause stays silent).
+            return [[("KW", "!EMPTY")]]
+        if clause[0][0] == "NUM":
+            # Implicit GOTO; reuses the ordinary GOTO handler.
+            return [[("KW", "GOTO"), clause[0]]]
+        out = []
+        for stmt in split_statements(clause):
+            if stmt and stmt[0] == ("KW", "IF"):
+                out.extend(self._compile_if_entries(stmt))
+            else:
+                out.append(stmt)
+        return out
 
     def _collect_data(self):
         """Collect DATA statements ahead of time.
@@ -967,6 +1038,25 @@ class Interpreter:
             self._jump_to(int(clause[0][1]))
         else:
             self._run_stmt_seq(clause)
+
+    # --- Compiled-IF pseudo-statements (emitted by _compile_if_entries) ---
+    def _do_if_skip(self, toks):
+        # [!IF skip <cond>]: when the condition is falsy, jump over the
+        # compiled then-part (skip entries) relative to this one.
+        ev = Evaluator(toks, self, 2)
+        cond = ev.parse()
+        if not (bool(cond) and cond != 0):
+            self.pc = self.pc + 1 + int(toks[1][1])
+            self.jumped = True
+
+    def _do_skip(self, toks):
+        # [!SKIP n]: unconditional relative jump (over a compiled else-part).
+        self.pc = self.pc + 1 + int(toks[1][1])
+        self.jumped = True
+
+    def _do_empty_clause(self, toks):
+        # [!EMPTY]: a selected THEN/ELSE clause that has no statements.
+        raise BasicError(Err.NOTHING_AFTER_THEN)
 
     def _run_stmt_seq(self, toks):
         """Run a token list that may hold several ':'-separated statements.

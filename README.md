@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.7.  
+> This is version 0.1.7-hotfix.  
 > v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features

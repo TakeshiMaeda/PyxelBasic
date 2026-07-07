@@ -318,6 +318,85 @@ def test_if_then_multi_and_false_skips_rest():
     check("if-then false skips clause", interp.get_var("W"), 0)
 
 
+def test_if_then_gosub_clause_resumes():
+    # GOSUB inside a THEN/ELSE clause must return to the statement after it
+    # (the rest of the clause), not to the next line.
+    io, _ = run_program([
+        (10, 'IF A=0 THEN GOSUB 200 : GOTO 300'),
+        (20, 'PRINT 1'),
+        (30, 'END'),
+        (200, 'PRINT 200'),
+        (210, 'RETURN'),
+        (300, 'PRINT 300'),
+        (310, 'END'),
+    ])
+    check("then gosub:goto", io.out, ["200", "300"])
+    io, _ = run_program([
+        (10, 'IF A=0 THEN PRINT 5 : GOSUB 200 : PRINT 999'),
+        (20, 'PRINT 1'),
+        (30, 'END'),
+        (200, 'PRINT 200'),
+        (210, 'RETURN'),
+    ])
+    check("then stmt:gosub:stmt tail", io.out, ["5", "200", "999", "1"])
+    io, _ = run_program([
+        (10, 'IF A=1 THEN PRINT 9 ELSE GOSUB 200 : GOTO 300'),
+        (20, 'PRINT 1'),
+        (30, 'END'),
+        (200, 'PRINT 200'),
+        (210, 'RETURN'),
+        (300, 'PRINT 300'),
+        (310, 'END'),
+    ])
+    check("else gosub:goto", io.out, ["200", "300"])
+
+
+def test_if_then_for_clause_loops():
+    # FOR...NEXT inside a THEN clause must loop within the clause.
+    io, _ = run_program([
+        (10, 'IF A=0 THEN FOR I=1 TO 3 : PRINT I : NEXT I'),
+        (20, 'PRINT 9'),
+    ])
+    check("for loops inside then clause", io.out, ["1", "2", "3", "9"])
+
+
+def test_if_compiled_edges():
+    # Nested IF in a THEN clause (the first ELSE binds flat, as before).
+    io, _ = run_program([
+        (10, 'IF A=0 THEN IF B=0 THEN PRINT 1 ELSE PRINT 2'),
+        (20, 'PRINT 9'),
+    ])
+    check("nested if in then clause", io.out, ["1", "9"])
+    # Implicit GOTO still works in both branches.
+    io, _ = run_program([
+        (10, 'IF A=1 THEN 100 ELSE 200'),
+        (100, 'PRINT 100'),
+        (110, 'END'),
+        (200, 'PRINT 200'),
+        (210, 'END'),
+    ])
+    check("implicit goto via else", io.out, ["200"])
+    # An empty THEN clause errors only when the branch is actually taken.
+    io, _ = run_program([
+        (10, 'IF A=1 THEN'),
+        (20, 'PRINT 9'),
+    ])
+    check("untaken empty then is silent", io.out, ["9"])
+    io, _ = run_program([
+        (10, 'IF A=0 THEN'),
+        (20, 'PRINT 9'),
+    ])
+    check("taken empty then errors", any("ERROR" in o for o in io.out), True)
+    # GOTO can still target an IF line (line_index points at its first entry).
+    io, _ = run_program([
+        (10, 'GOTO 30'),
+        (20, 'END'),
+        (30, 'IF A=0 THEN PRINT 7'),
+        (40, 'END'),
+    ])
+    check("goto targets an if line", io.out, ["7"])
+
+
 def test_multi_statement_data_unaffected():
     io, _ = run_program([
         (10, 'DATA 11, 22, 33'),
@@ -1437,6 +1516,8 @@ def main():
         test_if_else, test_if_else_implicit_goto, test_multi_statement_seq,
         test_multi_statement_for_next, test_multi_statement_gosub_continue,
         test_if_then_multi_and_false_skips_rest,
+        test_if_then_gosub_clause_resumes, test_if_then_for_clause_loops,
+        test_if_compiled_edges,
         test_multi_statement_data_unaffected,
         test_direct_multi_statement, test_direct_if_then_multi,
         test_direct_for_next_no_loop,

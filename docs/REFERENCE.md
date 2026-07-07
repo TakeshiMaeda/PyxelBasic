@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.5
+- Target version: v0.1.7-hotfix
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -316,7 +316,7 @@ GOSUB line-number
 ...
 RETURN
 ```
-`GOSUB` calls a subroutine; `RETURN` returns to the line after the call. Nesting is allowed.
+`GOSUB` calls a subroutine; `RETURN` returns to the **statement** after the call (including the rest of the same line, as in `GOSUB 100 : PRINT "BACK"`, and the rest of an `IF` `THEN` / `ELSE` clause). Nesting is allowed.
 
 ### IF ... THEN [... ELSE ...]
 ```
@@ -330,6 +330,9 @@ IF condition THEN line-number | statement [: statement ...] [ELSE line-number | 
 - `IF` claims **the rest of the line** as its `THEN` / `ELSE` clauses, so you
   cannot append another `:`-separated statement after an `IF` (it would become
   part of the clause).
+- Statements inside a clause run one at a time: `GOSUB` return points and
+  `FOR ... NEXT` loops work correctly within the clause (e.g.
+  `IF A=0 THEN GOSUB 200 : GOTO 300` executes `GOTO 300` after the `RETURN`).
 - For a nested `IF ... THEN IF ... THEN ... ELSE ...` on one line, which `IF` the
   `ELSE` binds to is not guaranteed (best-effort; split into separate lines to be
   sure).

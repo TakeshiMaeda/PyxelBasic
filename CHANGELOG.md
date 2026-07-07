@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7-hotfix
+- Fixed `GOSUB` inside an `IF ... THEN` / `ELSE` clause returning to the next line after `RETURN` instead of executing the rest of the clause
+- Fixed `FOR ... NEXT` / `INPUT` inside a clause not working correctly within the clause (same root cause)
+
 ## 0.1.7
 - Added the `FILES` command to list the `.bas` files in the working directory (`FILES "pattern"` filters the list)
 - Documented that file name casing follows the host filesystem
