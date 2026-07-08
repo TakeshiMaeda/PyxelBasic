@@ -7,6 +7,7 @@ Usage:
     python main.py --load hello         same as above
     python main.py --load stick --run   load and run automatically
     python main.py --workdir ./mybas    set the SAVE/LOAD directory
+    python main.py --ext .bas,.pxbas    program extensions in priority order
     python main.py --vm-cycle-ms 8      slow the VM throttle (retro pacing)
     python main.py --showfps            show the frame rate in the title bar
     python main.py --version            print the version and exit
@@ -16,7 +17,22 @@ import argparse
 
 from pyxelbasic.version import __version__
 from pyxelbasic.runtime import GFX_QUEUE_CAPACITY
-from pyxelbasic.session import CYCLE_STEPS, CYCLE_PERIOD, STEPS_PER_FRAME
+from pyxelbasic.session import (
+    CYCLE_STEPS, CYCLE_PERIOD, STEPS_PER_FRAME, DEFAULT_EXTENSIONS,
+)
+
+
+def _ext_list(s):
+    exts = []
+    for part in s.split(","):
+        part = part.strip()
+        if not part.startswith("."):
+            part = "." + part
+        if len(part) < 2:
+            raise argparse.ArgumentTypeError(
+                "empty extension in list (expected e.g. .bas,.pxbas)")
+        exts.append(part.lower())
+    return tuple(exts)
 
 
 def _positive_int(s):
@@ -47,6 +63,12 @@ def build_parser():
         "--workdir", metavar="DIR", default=None,
         help="directory used by SAVE/LOAD "
              "(fixed at startup; cannot be changed from inside the interpreter)")
+    parser.add_argument(
+        "--ext", metavar="LIST", type=_ext_list, default=DEFAULT_EXTENSIONS,
+        help="program file extensions in priority order, comma-separated "
+             "(leading dot optional). SAVE appends the first one when the "
+             "name has no extension; LOAD tries them in order "
+             "(default %s)" % ",".join(DEFAULT_EXTENSIONS))
     parser.add_argument(
         "--exec-mode", choices=("main", "thread"), default="main",
         help="VM execution mode: 'main' drives the VM from the Pyxel main loop "
@@ -103,6 +125,7 @@ def main():
     # Imported here so that --version needs neither Pyxel nor a display.
     from pyxelbasic.app import App
     App(autoload=load, workdir=args.workdir, autorun=args.run,
+        extensions=args.ext,
         show_fps=args.showfps, gfx_queue_size=args.gfx_queue_size,
         cycle_steps=args.vm_cycle_steps,
         cycle_period=args.vm_cycle_ms / 1000.0,

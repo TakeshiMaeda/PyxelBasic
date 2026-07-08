@@ -45,6 +45,11 @@ STEPS_PER_FRAME = 8000
 
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
 
+# Program file extensions, in priority order. The first is appended by SAVE
+# when the name has no extension; LOAD tries them in order until a file
+# exists. Overridable at startup (--ext); fixed for the session after that.
+DEFAULT_EXTENSIONS = (".bas", ".pxbas")
+
 # Editor key id -> Editor method name ("enter" is line submission).
 EDITOR_KEY_ACTIONS = {
     KEY_LEFT: "move_left",
@@ -158,6 +163,14 @@ class SessionIO:
         c = self.screen.color if col is None else col
         self.gfx.put(("trif", (x1, y1, x2, y2, x3, y3, c)))
 
+    def palette(self, n, rgb):
+        # Palette entries live in pyxel.colors (main-thread owned), so palette
+        # changes ride the same graphics command path as the draw statements.
+        self.gfx.put(("palette", (n, rgb)))
+
+    def palette_reset(self):
+        self.gfx.put(("palette_reset", ()))
+
     def point(self, x, y):
         # Read back a pixel via the graphics target. The Pyxel image is only
         # touchable on the main thread, so in threaded mode this round-trips
@@ -217,8 +230,9 @@ class Session:
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
                  debug_throttle=False, vsync_enabled=False, sprite_table=None,
-                 audio=None):
+                 audio=None, extensions=None):
         self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
+        self.extensions = tuple(extensions) if extensions else DEFAULT_EXTENSIONS
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
         self.keys = KeyState()
@@ -519,11 +533,11 @@ class Session:
         name = next((v for (k, v) in toks if k == "STR"), None)
         if not name:
             raise BasicError(Err.SAVE_REQUIRES_NAME)
-        path = self._resolve_path(name)
+        path = self._resolve_save_path(name)
         with open(path, "w", encoding="utf-8") as f:
             for ln, src in self.interp.list_lines():
                 f.write("%d %s\n" % (ln, src))
-        self.screen.print_line('SAVED "%s"' % name)
+        self.screen.print_line('SAVED "%s"' % os.path.basename(path))
 
     def _cmd_load(self, toks):
         name = next((v for (k, v) in toks if k == "STR"), None)
@@ -532,20 +546,20 @@ class Session:
         self._load_file(name)
 
     def _cmd_files(self, toks):
-        # FILES ["pattern"]: list the .bas files in the workdir, extension
-        # stripped, packed into columns that fit the screen width. Names are
-        # shown exactly as the OS reports them, and fnmatch follows the host
-        # filesystem's case rules - the same policy as SAVE/LOAD, which pass
-        # the typed name through untouched.
+        # FILES ["pattern"]: list the files in the workdir (extension shown),
+        # packed into columns that fit the screen width. The pattern matches
+        # the full name including the extension ("*.bas", "*.txt", "A*").
+        # Names are shown exactly as the OS reports them, and fnmatch follows
+        # the host filesystem's case rules - the same policy as SAVE/LOAD,
+        # which pass the typed name through untouched.
         pattern = next((v for (k, v) in toks if k == "STR"), None)
         try:
             entries = os.listdir(self.workdir)
         except OSError:
             entries = []
         names = sorted(
-            (e[:-4] for e in entries
-             if e.lower().endswith(".bas")
-             and os.path.isfile(os.path.join(self.workdir, e))),
+            (e for e in entries
+             if os.path.isfile(os.path.join(self.workdir, e))),
             key=str.lower)
         if pattern is not None:
             names = [n for n in names if fnmatch.fnmatch(n, pattern)]
@@ -558,7 +572,7 @@ class Session:
             self.screen.print_line("".join(n.ljust(width) for n in row).rstrip())
 
     def _load_file(self, name):
-        path = self._resolve_path(name)
+        path = self._resolve_load_path(name)
         if not os.path.exists(path):
             self.screen.print_line('?FILE NOT FOUND "%s"' % name)
             return False
@@ -569,14 +583,31 @@ class Session:
                 if s and s[0].isdigit():
                     num, rest = self._split_lineno(s)
                     self.interp.store_line(num, rest)
-        self.screen.print_line('LOADED "%s"' % name)
+        self.screen.print_line('LOADED "%s"' % os.path.basename(path))
         return True
 
-    def _resolve_path(self, name):
-        if not name.lower().endswith(".bas"):
-            name += ".bas"
+    def _resolve_save_path(self, name):
+        # A name with an extension is used as is; otherwise the first-priority
+        # extension is appended.
+        if not os.path.splitext(name)[1]:
+            name += self.extensions[0]
         os.makedirs(self.workdir, exist_ok=True)
         return os.path.join(self.workdir, name)
+
+    def _resolve_load_path(self, name):
+        # The typed name is tried exactly as given first; when no such file
+        # exists, the registered extensions are appended in priority order
+        # (never substituted) and the first existing candidate wins. When
+        # nothing exists, the literal path is returned so the caller's
+        # not-found report has a concrete path to test.
+        path = os.path.join(self.workdir, name)
+        if os.path.exists(path):
+            return path
+        for ext in self.extensions:
+            candidate = path + ext
+            if os.path.exists(candidate):
+                return candidate
+        return path
 
     # --- display ---
     def _banner(self):

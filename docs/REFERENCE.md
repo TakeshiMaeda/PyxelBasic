@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.7-hotfix
+- Target version: v0.1.8
 - Runtime: Python 3.10+ with Pyxel
 - Encoding: UTF-8 for both source and data files
 
@@ -37,7 +37,7 @@ PyxelBasic is a line-numbered, classic-style BASIC interpreter that runs on Pyxe
 - Line numbers are required. The program runs in line-number order.
 - Multiple statements can be placed on one line, separated by `:`.
 - Case-insensitive (`print` and `PRINT` are the same). Statement, function, and variable names are uppercased internally.
-- Programs can be saved to and loaded from text files (`.bas`).
+- Programs can be saved to and loaded from text files (`.bas` by default).
 
 ---
 
@@ -47,6 +47,9 @@ PyxelBasic is a line-numbered, classic-style BASIC interpreter that runs on Pyxe
 python main.py                 start normally (edit mode)
 python main.py hello           load samples/hello.bas on startup
 python main.py --workdir DIR   set the SAVE/LOAD directory (default: samples/)
+python main.py --ext LIST      program extensions in priority order,
+                               comma-separated (default: .bas,.pxbas;
+                               the leading dot is optional)
 ```
 
 - Screen size: 256 x 256 pixels, 60 FPS.
@@ -165,15 +168,19 @@ Management commands entered at the prompt without a line number.
 | `RENUM` | Renumber lines starting at 10 in steps of 10 |
 | `RENUM start` | Renumber from `start` in steps of 10 |
 | `RENUM start,step` | Renumber from `start` in steps of `step` |
-| `SAVE "name"` | Save `name.bas` to the working directory |
-| `LOAD "name"` | Load `name.bas` from the working directory (discards the current program) |
-| `FILES` | List the `.bas` files in the working directory |
-| `FILES "pattern"` | List only the matching files (`*` = any length, `?` = one character) |
+| `SAVE "name"` | Save to the working directory (the first-priority extension is appended when the name has none) |
+| `LOAD "name"` | Load from the working directory (discards the current program) |
+| `FILES` | List the files in the working directory, extensions shown |
+| `FILES "pattern"` | List only the matching files (`*` = any length, `?` = one character; the pattern matches the full name including the extension, so e.g. `*.bas` works) |
 
 - `RENUM` also updates line numbers that appear right after `GOTO` / `GOSUB` / `THEN` / `ELSE` (an implicit-GOTO target) / `RESTORE`.
-- If the `SAVE` / `LOAD` file name has no extension, `.bas` is appended. The working directory defaults to `samples/`; the startup option `--workdir DIR` changes it (it cannot be changed from inside the interpreter).
+- Program extensions are registered at startup with `--ext`, in priority order (default `.bas,.pxbas`), and cannot be changed afterwards.
+  - `SAVE "XXX"` saves `XXX` + the first-priority extension (`XXX.bas` by default). A name with an extension, such as `SAVE "XXX.bas"` or `SAVE "XXX.xxx"`, is saved exactly as given.
+  - `LOAD "name"` first looks for a file with exactly the given name and reads it when it exists. Otherwise the registered extensions are appended in priority order (never substituted): by default `LOAD "XXX"` tries `XXX`, then `XXX.bas`, then `XXX.pxbas`, and `LOAD "XXX.xxx"` tries `XXX.xxx`, then `XXX.xxx.bas`, then `XXX.xxx.pxbas`.
+  - The `SAVED` / `LOADED` messages show the resolved file name (extension included).
+- The working directory defaults to `samples/`; the startup option `--workdir DIR` changes it (it cannot be changed from inside the interpreter).
 - File names are passed to the host filesystem exactly as typed, with no case normalization. Case sensitivity follows the platform: on Windows and macOS (by default) `LOAD "HELLO"` opens `hello.bas`, while on case-sensitive systems such as Linux it does not.
-- `FILES` lists the names without the `.bas` extension, exactly as the OS reports them, packed into as many columns as fit the screen width. Pattern matching also follows the host's case rules.
+- `FILES` lists the names exactly as the OS reports them, packed into as many columns as fit the screen width. Pattern matching also follows the host's case rules.
 - Other statements (`PRINT`, assignments, etc.) can also be executed directly at the prompt.
 
 ---
@@ -464,6 +471,24 @@ CIRCLEF (X, Y), radius, color [, start] [, end] [, ratio]
 
 To pass `ratio` without angles, leave the angle slots empty: `CIRCLE (X, Y), R, C, , , 1.5`.
 
+### PALETTE
+```
+PALETTE no, value
+PALETTE no, R, G, B
+PALETTE RESET
+```
+Changes the color of palette entry `no` (0-15). In the first form `value` is a 24bit RGB value (0-&HFFFFFF; pairs well with `&H` hex literals); the second form takes the components separately (0-255 each). `PALETTE RESET` restores all 16 colors to Pyxel's default palette.
+
+- Because colors are indexed, a change affects the Graphic, Sprite and Text planes alike, and applies **retroactively to pixels already drawn** (classic palette tricks work as on retro hardware).
+- Like the VSYNC settings, palette changes persist across RUN and BREAK, and return to the defaults with `PALETTE RESET` or `NEW`.
+- An out-of-range `no`, `value` or component is an error (Section 13, code 410).
+
+```basic
+10 PALETTE 7, &HFF0000    ' turn white (7) into red
+20 PALETTE 7, 255, 0, 0   ' the same, by components
+30 PALETTE RESET          ' back to the default palette
+```
+
 ### RANDOMIZE
 ```
 RANDOMIZE [seed]
@@ -659,7 +684,7 @@ In main mode the Pyxel main loop runs up to `--steps-per-frame` statements each 
 **How frame breaks work**
 
 - Executing (a statement) or evaluating (a function) a frame-break keyword breaks the frame there (after that statement/function has run).
-- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `TRI` `TRIF` `CIRCLE` `CIRCLEF` `STICK` `BUTTON` `PUT`**.
+- Keywords that are frame-break targets by default: **`PRINT` `PSET` `LINE` `LINEB` `LINEBF` `TRI` `TRIF` `CIRCLE` `CIRCLEF` `PALETTE` `STICK` `BUTTON` `PUT`**.
 - The set of targets can be changed at runtime with the `VSYNC` command.
 
 **VSYNC command**
@@ -820,6 +845,7 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 407 | `Invalid sprite data character: c` | A `SET SPRITE` hex string has a non-hex character |
 | 408 | `Play channel out of range (0-3): n` | A `PLAY` channel is outside 0-3 |
 | 409 | `Invalid MML: mml` | A `PLAY` MML string could not be parsed |
+| 410 | `Palette value out of range: n` | A `PALETTE` number (0-15), RGB value (0-&HFFFFFF) or component (0-255) is out of range |
 | 501 | `SAVE requires a file name` | `SAVE` without a file name |
 | 502 | `LOAD requires a file name` | `LOAD` without a file name |
 
@@ -849,4 +875,4 @@ Colors are specified by Pyxel's standard 16-color palette (numbers 0 to 15). Rep
 | 6 | Light blue-gray | 14 | Pink |
 | 7 | White | 15 | Peach |
 
-> The actual colors follow the version and palette settings of the Pyxel you are using.
+> The actual colors follow the version and palette settings of the Pyxel you are using. Each entry can be changed with the `PALETTE` statement (Section 8).

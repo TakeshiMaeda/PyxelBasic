@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.7-hotfix.  
+> This is version 0.1.8.  
 > v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features
@@ -49,6 +49,7 @@ python main.py hello                load hello.bas on startup (shorthand)
 python main.py --load hello         same as above
 python main.py --load stick --run   load and run automatically
 python main.py --workdir ./mybas    set the SAVE/LOAD directory
+python main.py --ext .bas,.pxbas    program extensions in priority order
 python main.py --exec-mode thread   run BASIC on a separate thread
 python main.py --showfps            show the frame rate in the title bar
 python main.py --version            print the version and exit
@@ -60,6 +61,11 @@ Options:
 - `--load FILE` program to load on startup.
 - `--workdir DIR` directory used by SAVE/LOAD. Fixed at startup; it cannot be
   changed from inside the interpreter. Defaults to the bundled `samples/`.
+- `--ext LIST` register program extensions, comma-separated in priority order
+  (default `.bas,.pxbas`; the leading dot is optional). `SAVE` appends the
+  first one when the name has no extension; `LOAD` tries the name exactly as
+  given, then appends the registered extensions in order. See "Direct Commands"
+  in [docs/REFERENCE.md](docs/REFERENCE.md) for details.
 - `--run` run the loaded program automatically (requires `--load`).
 - `--showfps` show the real frame rate in the window title bar.
 - `--exec-mode {main,thread}` choose the execution model (default main). In main
@@ -126,7 +132,7 @@ For the **complete reference** of implemented statements, functions, and operato
 
 Main elements:
 
-- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- Statements: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `PALETTE` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - Functions: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - Operators: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 

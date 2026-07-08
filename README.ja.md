@@ -8,7 +8,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.7-hotfixです。  
+> 現在のバージョンはv0.1.8です。  
 > v0.1.6 で塗りつぶし円の命令名を `CIRCLEBF` から `CIRCLEF` に変更しました。
 
 ## 特徴
@@ -49,6 +49,7 @@ python main.py hello                起動時に hello.bas を読み込む（短
 python main.py --load hello         上と同じ
 python main.py --load stick --run   読み込んで自動実行
 python main.py --workdir ./mybas    SAVE/LOAD 用ディレクトリを指定
+python main.py --ext .bas,.pxbas    プログラムの拡張子を優先度順に指定
 python main.py --exec-mode thread   BASICを別スレッドで実行
 python main.py --showfps            フレームレートをタイトルバーに表示
 python main.py --version            バージョンを表示して終了
@@ -60,6 +61,7 @@ python main.py --help               ヘルプを表示して終了
 - `--load FILE` 起動時に読み込むプログラム。
 - `--workdir DIR` SAVE/LOAD が使うディレクトリ。起動時に固定され、インタプリタ内部からは
   変更できない。省略時は同梱の `samples/`。
+- `--ext LIST` プログラムの拡張子をカンマ区切り・優先度順で登録する（既定 `.bas,.pxbas`、ドット省略可）。`SAVE` は拡張子なしの名前に第一優先を付与し、`LOAD` は指定どおりの名前 → 登録拡張子を順に追加、で探す。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「ダイレクトコマンド」参照。
 - `--run` 読み込んだプログラムを自動実行する（`--load` が必要）。
 - `--showfps` 実フレームレートをウィンドウのタイトルバーに表示する。
 - `--exec-mode {main,thread}` 実行モデルの選択（既定 main）。main は Pyxel のメインループが毎フレーム VM を駆動し `VSYNC` が有効、thread は VM を別スレッドで実行し `VSYNC` は no-op。詳細は [docs/REFERENCE.ja.md](docs/REFERENCE.ja.md) の「実行ペーシングと VSYNC」参照。
@@ -119,7 +121,7 @@ RUN
 
 主な要素:
 
-- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
+- 命令: `PRINT` `INPUT` `LET` `GOTO` `GOSUB`/`RETURN` `IF...THEN...ELSE` `FOR...NEXT` `DIM` `DATA`/`READ`/`RESTORE` `CLS` `LOCATE` `COLOR` `PSET` `LINE` `LINEB`/`LINEBF` `TRI`/`TRIF` `CIRCLE`/`CIRCLEF` `PALETTE` `SET SPRITE`/`PUT SPRITE` `PLAY` `RANDOMIZE` `VSYNC` `END`/`STOP`
 - 関数: `LEN` `LEFT$` `RIGHT$` `MID$` `CHR$` `ASC` `STR$` `HEX$` `VAL` / `ABS` `SGN` `INT` `FIX` `ROUND` `SIN` `COS` `TAN` `ATN` `RAD` `DEG` `EXP` `LOG` `LOG10` `SQR` / `RND` `INKEY$` `STICK` `BUTTON` `POINT` `PLAY`
 - 演算子: `+` `-` `*` `/` `MOD` `^` / `=` `<>` `<` `<=` `>` `>=` / `AND` `OR` `NOT` `XOR`
 

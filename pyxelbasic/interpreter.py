@@ -617,6 +617,9 @@ class Interpreter:
         self.program = {}
         # Reset the frame-break config too (only populated in main-driven mode).
         self.frame_break = set(FRAME_BREAK) if self.vsync_enabled else set()
+        # NEW also restores the default palette (same lifetime as the VSYNC
+        # config: persists across RUN/BREAK, reset by NEW / PALETTE RESET).
+        self.io.palette_reset()
         self.reset_runtime()
         self.state = "EDIT"
 
@@ -850,7 +853,8 @@ class Interpreter:
         handler(toks)
 
         # Frame-break target (main-driven mode only): cut off the frame here.
-        if val in self.frame_break:
+        # Compiled IF heads execute as "!IF" but must still honour "VSYNC IF ON".
+        if val in self.frame_break or (val == "!IF" and "IF" in self.frame_break):
             self.yield_frame = True
 
     # --- Implementation of each statement ---
@@ -1159,6 +1163,36 @@ class Interpreter:
         ev.advance()
         y = ev.parse()
         self.io.locate(int(x), int(y))
+
+    def _do_palette(self, toks):
+        # PALETTE n, rgb  (rgb = 24bit 0..&HFFFFFF)
+        # PALETTE n, r, g, b  (components 0..255, packed into one rgb command)
+        # PALETTE RESET  (restore the default Pyxel palette)
+        # Palette changes persist across RUN/BREAK like the VSYNC config; NEW
+        # and PALETTE RESET restore the default.
+        if len(toks) >= 2 and toks[1][1] == "RESET":
+            self.io.palette_reset()
+            return
+        ev = Evaluator(toks, self, 1)
+        args = [ev.parse()]
+        while ev.peek()[0] == "COMMA":
+            ev.advance()
+            args.append(ev.parse())
+        if len(args) not in (2, 4):
+            raise BasicError(Err.SYNTAX_ERROR)
+        n = int(args[0])
+        if not 0 <= n <= 15:
+            raise BasicError(Err.PALETTE_OUT_OF_RANGE, n)
+        if len(args) == 2:
+            rgb = int(args[1])
+            if not 0 <= rgb <= 0xFFFFFF:
+                raise BasicError(Err.PALETTE_OUT_OF_RANGE, rgb)
+        else:
+            for v in args[1:]:
+                if not 0 <= int(v) <= 255:
+                    raise BasicError(Err.PALETTE_OUT_OF_RANGE, int(v))
+            rgb = int(args[1]) * 65536 + int(args[2]) * 256 + int(args[3])
+        self.io.palette(n, rgb)
 
     def _do_pset(self, toks):
         # PSET(x,y)[,col]  or  PSET(x,y,col)

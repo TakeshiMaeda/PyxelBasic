@@ -33,9 +33,22 @@ class PyxelGraphicsSurface:
         # images live in one place and SET SPRITE rides the same drain path.
         self.sprite_img = pyxel.Image(SPRITE_SHEET, SPRITE_SHEET)
         self.sprite_img.cls(0)
+        # Snapshot of the default palette, taken before any PALETTE statement
+        # can run, so palette_reset() can restore the Pyxel defaults.
+        self._default_palette = pyxel.colors.to_list()
 
     def cls(self):
         self.img.cls(self.bg)
+
+    def palette(self, n, rgb):
+        # Indexed color: retroactively affects every pixel already drawn with
+        # color n, on the graphics, text and sprite planes alike.
+        colors = pyxel.colors.to_list()
+        colors[n] = rgb
+        pyxel.colors.from_list(colors)
+
+    def palette_reset(self):
+        pyxel.colors.from_list(self._default_palette)
 
     def set_sprite(self, no, colors):
         # colors is a flat list of colour numbers, length a multiple of 64; each

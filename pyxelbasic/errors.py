@@ -66,6 +66,7 @@ class Err(IntEnum):
     INVALID_SPRITE_DATA = 407
     PLAY_CHANNEL_OUT_OF_RANGE = 408
     INVALID_MML = 409
+    PALETTE_OUT_OF_RANGE = 410
 
     # --- 5xx: file / command ---
     SAVE_REQUIRES_NAME = 501
@@ -123,6 +124,7 @@ MESSAGES = {
     Err.INVALID_SPRITE_DATA: "Invalid sprite data character: %s",
     Err.PLAY_CHANNEL_OUT_OF_RANGE: "Play channel out of range (0-3): %s",
     Err.INVALID_MML: "Invalid MML: %s",
+    Err.PALETTE_OUT_OF_RANGE: "Palette value out of range: %s",
 
     # 5xx: file / command
     Err.SAVE_REQUIRES_NAME: "SAVE requires a file name",

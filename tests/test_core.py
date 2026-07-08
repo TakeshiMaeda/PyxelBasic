@@ -91,6 +91,12 @@ class MockIO:
     def trif(self, x1, y1, x2, y2, x3, y3, col=None):
         self.gfx.append(("trif", x1, y1, x2, y2, x3, y3, col))
 
+    def palette(self, n, rgb):
+        self.gfx.append(("palette", n, rgb))
+
+    def palette_reset(self):
+        self.gfx.append(("palette_reset",))
+
     def point(self, x, y):
         return self.pixels.get((x, y), 0)
 
@@ -865,6 +871,22 @@ def test_vsync_main_mode_yield_on_eval():
     check("main mode yields on frame-break", interp.yield_frame, True)
 
 
+def test_vsync_if_on_fires_on_compiled_if():
+    # VSYNC IF ON must fire on stored-program IF lines, which execute as
+    # the compiled "!IF" pseudo-statement rather than as "IF".
+    io = MockIO()
+    interp = Interpreter(io, vsync_enabled=True)
+    interp.state = "RUN"
+    interp.jumped = False
+    interp._run_stmt_seq(tokenize("VSYNC IF ON"))
+    interp.state = "EDIT"
+    for ln, src in [(10, 'IF A=0 THEN B=1'), (20, 'END')]:
+        interp.store_line(ln, src)
+    interp.prepare_run()
+    interp.step()
+    check("VSYNC IF ON fires on compiled IF", interp.yield_frame, True)
+
+
 def test_session_run_frame_yields():
     # Session.run_frame honours yield_frame: one frame-break statement per frame.
     gfx = _Recorder()
@@ -882,8 +904,8 @@ def test_session_run_frame_yields():
 
 
 def test_files_command():
-    # FILES lists .bas files (extension stripped, names as the OS reports
-    # them, non-.bas files hidden); an optional "pattern" filters with * / ?.
+    # FILES lists every file in the workdir (extension shown, names as the OS
+    # reports them); an optional "pattern" matches the full name with * / ?.
     with tempfile.TemporaryDirectory() as d:
         for fn in ("beta.bas", "alpha.bas", "Gamma.bas", "note.txt"):
             open(os.path.join(d, fn), "w").close()
@@ -893,14 +915,83 @@ def test_files_command():
         rows = ["".join(r).rstrip() for r in s.screen.chars]
         listing = [r for r in rows if r]
         check("files one row fits", len(listing), 1)
-        check("files sorted, no extension, case kept",
-              listing[0].split(), ["alpha", "beta", "Gamma"])
-        check("files hides non-bas", "note" in listing[0], False)
+        check("files sorted, extension shown, case kept",
+              listing[0].split(),
+              ["alpha.bas", "beta.bas", "Gamma.bas", "note.txt"])
         s2 = Session(64, 42, DirectGraphics(_Recorder()), InputRing(), workdir=d)
         s2.screen.cls()
         s2._direct_command('FILES "al*"')
         rows2 = ["".join(r).rstrip() for r in s2.screen.chars]
-        check("files pattern filters", [r for r in rows2 if r], ["alpha"])
+        check("files pattern filters", [r for r in rows2 if r], ["alpha.bas"])
+        s3 = Session(64, 42, DirectGraphics(_Recorder()), InputRing(), workdir=d)
+        s3.screen.cls()
+        s3._direct_command('FILES "*.txt"')
+        rows3 = ["".join(r).rstrip() for r in s3.screen.chars]
+        check("files pattern by extension", [r for r in rows3 if r], ["note.txt"])
+
+
+def test_save_load_extensions():
+    # SAVE appends the first-priority extension only when the name has none;
+    # LOAD uses a given extension as is and otherwise tries the registered
+    # extensions in priority order. Messages report the resolved file name.
+    def screen_lines(sess):
+        return [r for r in ("".join(row).rstrip() for row in sess.screen.chars)
+                if r]
+
+    with tempfile.TemporaryDirectory() as d:
+        s = Session(64, 42, DirectGraphics(_Recorder()), InputRing(), workdir=d)
+        s.interp.store_line(10, 'PRINT "HI"')
+        s._direct_command('SAVE "prog"')
+        check("save appends default ext",
+              os.path.isfile(os.path.join(d, "prog.bas")), True)
+        s._direct_command('SAVE "prog.txt"')
+        check("save keeps a given extension",
+              os.path.isfile(os.path.join(d, "prog.txt")), True)
+        check("save does not double-append",
+              os.path.isfile(os.path.join(d, "prog.txt.bas")), False)
+        s.screen.cls()
+        s._direct_command('LOAD "prog.txt"')
+        check("load keeps a given extension",
+              'LOADED "prog.txt"' in screen_lines(s), True)
+        # LOAD without extension: priority search (.bas first, then .pxbas).
+        with open(os.path.join(d, "other.pxbas"), "w", encoding="utf-8") as f:
+            f.write('10 PRINT "PX"\n')
+        s.screen.cls()
+        s._direct_command('LOAD "other"')
+        check("load falls back to .pxbas",
+              'LOADED "other.pxbas"' in screen_lines(s), True)
+        with open(os.path.join(d, "other.bas"), "w", encoding="utf-8") as f:
+            f.write('10 PRINT "BAS"\n')
+        s.screen.cls()
+        s._direct_command('LOAD "other"')
+        check("first priority wins",
+              'LOADED "other.bas"' in screen_lines(s), True)
+        # The literal name is tried before any extension is appended.
+        for fn in ("plain", "plain.bas"):
+            with open(os.path.join(d, fn), "w", encoding="utf-8") as f:
+                f.write('10 PRINT "P"\n')
+        s.screen.cls()
+        s._direct_command('LOAD "plain"')
+        check("literal name wins over appended ext",
+              'LOADED "plain"' in screen_lines(s), True)
+        # A dotted name also falls back by appending (never substituting).
+        with open(os.path.join(d, "data.v2.bas"), "w", encoding="utf-8") as f:
+            f.write('10 PRINT "V2"\n')
+        s.screen.cls()
+        s._direct_command('LOAD "data.v2"')
+        check("dotted name appends extension",
+              'LOADED "data.v2.bas"' in screen_lines(s), True)
+        # Custom priority order via the extensions parameter.
+        s2 = Session(64, 42, DirectGraphics(_Recorder()), InputRing(),
+                     workdir=d, extensions=(".pxbas", ".bas"))
+        s2.screen.cls()
+        s2._direct_command('LOAD "other"')
+        check("custom order picks .pxbas first",
+              'LOADED "other.pxbas"' in screen_lines(s2), True)
+        s.screen.cls()
+        s._direct_command('LOAD "missing"')
+        check("not found shows typed name",
+              '?FILE NOT FOUND "missing"' in screen_lines(s), True)
 
 
 def test_break_stops_sound():
@@ -1228,6 +1319,54 @@ def _err_code(lines):
     return None
 
 
+def test_palette():
+    # The 2-argument (24bit rgb) and 4-argument (r, g, b) forms normalize to
+    # the same single command; PALETTE RESET restores the default palette.
+    io, _ = run_program([
+        (10, 'PALETTE 7, &HFF8040'),
+        (20, 'PALETTE 7, 255, 128, 64'),
+        (30, 'PALETTE RESET'),
+    ])
+    check("palette 2-arg form", io.gfx[0], ("palette", 7, 0xFF8040))
+    check("palette 4-arg form", io.gfx[1], io.gfx[0])
+    check("palette reset", io.gfx[2], ("palette_reset",))
+
+
+def test_palette_range():
+    # Out-of-range index / component / packed value all raise 410; an
+    # unsupported argument count (3) is a syntax error.
+    ok = int(Err.PALETTE_OUT_OF_RANGE)
+    check("palette n=16", _err_code([(10, 'PALETTE 16, 0')]), ok)
+    check("palette n=-1", _err_code([(10, 'PALETTE -1, 0')]), ok)
+    check("palette component 256", _err_code([(10, 'PALETTE 0, 256, 0, 0')]), ok)
+    check("palette component -1", _err_code([(10, 'PALETTE 0, 0, -1, 0')]), ok)
+    check("palette rgb overflow", _err_code([(10, 'PALETTE 0, &H1000000')]), ok)
+    check("palette 3 args", _err_code([(10, 'PALETTE 0, 1, 2')]),
+          int(Err.SYNTAX_ERROR))
+    check("palette max values ok",
+          _err_code([(10, 'PALETTE 15, &HFFFFFF'), (20, 'PALETTE 15, 255, 255, 255')]),
+          None)
+
+
+def test_palette_new_resets():
+    # NEW restores the default palette (same lifetime as the VSYNC config).
+    io = MockIO()
+    interp = Interpreter(io)
+    interp.new_program()
+    check("NEW issues palette_reset", ("palette_reset",) in io.gfx, True)
+
+
+def test_palette_framebreak():
+    # PALETTE is a frame-break target like the other drawing statements.
+    io = MockIO()
+    interp = Interpreter(io, vsync_enabled=True)
+    for ln, src in [(10, 'PALETTE 7, 0'), (20, 'END')]:
+        interp.store_line(ln, src)
+    interp.prepare_run()
+    interp.step()
+    check("PALETTE yields frame", interp.yield_frame, True)
+
+
 def test_set_sprite():
     # 64 hex chars define one 8x8 pattern; each char is one pixel colour.
     io, _ = run_program([(10, 'SET SPRITE 0, "' + "0123456789ABCDEF" * 4 + '"')])
@@ -1475,6 +1614,7 @@ def test_dispatch_registration():
         "PRINT", "INPUT", "LET", "GOTO", "GOSUB", "RETURN", "IF",
         "FOR", "NEXT", "DIM", "REM", "CLS", "LOCATE", "COLOR",
         "PSET", "LINE", "LINEB", "LINEBF", "TRI", "TRIF", "CIRCLE", "CIRCLEF",
+        "PALETTE",
         "END", "STOP", "DATA", "READ", "RESTORE",
         "RANDOMIZE", "VSYNC", "SET", "PUT", "PLAY",
     }
@@ -1532,6 +1672,8 @@ def main():
         test_input, test_logical, test_graphics,
         test_cls_args, test_cls_mask_range, test_list_range, test_lineb, test_tri,
         test_circle_full, test_circle_ratio, test_circle_arc, test_point,
+        test_palette, test_palette_range, test_palette_new_resets,
+        test_palette_framebreak,
         test_set_sprite, test_set_sprite_errors,
         test_put_sprite, test_put_sprite_off, test_put_sprite_errors,
         test_sprite_framebreak, test_sprite_table, test_sprite_geometry,
@@ -1541,7 +1683,9 @@ def main():
         test_command_queue_pget,
         test_vsync_noop, test_vsync_threaded_no_framebreak,
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
-        test_session_run_frame_yields, test_files_command, test_break_stops_sound,
+        test_vsync_if_on_fires_on_compiled_if,
+        test_session_run_frame_yields, test_files_command,
+        test_save_load_extensions, test_break_stops_sound,
         test_inkey_flush_on_run, test_break_during_input_wait,
         test_direct_error_resets_state,
         test_direct_graphics_immediate,

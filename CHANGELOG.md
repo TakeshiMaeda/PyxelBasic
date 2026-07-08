@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+- Added the `PALETTE` statement to change palette colors (`PALETTE no, rgb` / `PALETTE no, R, G, B` / `PALETTE RESET`)
+- Added the `--ext` startup option to register program extensions in priority order (default `.bas,.pxbas`)
+- Reworked `SAVE` / `LOAD` / `FILES` to handle extensions other than `.bas`
+- Fixed a regression where `VSYNC IF ON` did not fire on stored-program `IF` lines
+
 ## 0.1.7-hotfix
 - Fixed `GOSUB` inside an `IF ... THEN` / `ELSE` clause returning to the next line after `RETURN` instead of executing the rest of the clause
 - Fixed `FOR ... NEXT` / `INPUT` inside a clause not working correctly within the clause (same root cause)

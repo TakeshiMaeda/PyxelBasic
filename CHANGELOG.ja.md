@@ -1,5 +1,11 @@
 # 変更履歴
 
+## 0.1.8
+- パレットの色を変更する `PALETTE` 命令を追加（`PALETTE 番号, RGB値` / `PALETTE 番号, R, G, B` / `PALETTE RESET`）
+- プログラムの拡張子を優先度順に複数登録する起動オプション `--ext` を追加（既定は `.bas,.pxbas`）
+- `SAVE` / `LOAD` / `FILES` の仕様を見直し `.bas` 以外の拡張子を扱えるように対応
+- `VSYNC IF ON` がプログラム中の `IF` 行に効かない退行を修正
+
 ## 0.1.7-hotfix
 - `IF ... THEN`／`ELSE` 節内の `GOSUB` が、`RETURN` 後に節の続き（`GOSUB` より後ろの文）を実行せず次の行へ戻ってしまうバグを修正
 - 同じ原因で、節内の `FOR ... NEXT` / `INPUT` が節の中で正しく動作しないバグを修正
