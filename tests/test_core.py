@@ -29,6 +29,9 @@ from pyxelbasic.keywords import (  # noqa: E402
 from pyxelbasic.textscreen import TextScreen  # noqa: E402
 from pyxelbasic.editor import Editor  # noqa: E402
 from pyxelbasic.session import Session, STEPS_PER_FRAME, parse_list_range  # noqa: E402
+from pyxelbasic.filestore import (  # noqa: E402
+    resolve_save_name, resolve_load_name, DEFAULT_EXTENSIONS,
+)
 
 
 class MockIO:
@@ -994,6 +997,130 @@ def test_save_load_extensions():
               '?FILE NOT FOUND "missing"' in screen_lines(s), True)
 
 
+def test_filestore_name_resolution():
+    # resolve_save_name / resolve_load_name are the shared extension-priority
+    # logic every store implementation uses (local filesystem and web alike).
+    exts = (".bas", ".pxbas")
+    check("save appends first ext", resolve_save_name("prog", exts), "prog.bas")
+    check("save keeps a given ext",
+          resolve_save_name("prog.txt", exts), "prog.txt")
+    check("save keeps a dotted name",
+          resolve_save_name("data.v2", exts), "data.v2")
+    files = {"other.pxbas", "plain", "plain.bas"}
+    check("load literal name wins",
+          resolve_load_name("plain", files.__contains__, exts), "plain")
+    check("load appends by priority",
+          resolve_load_name("other", files.__contains__, exts), "other.pxbas")
+    check("load missing returns typed name",
+          resolve_load_name("nope", files.__contains__, exts), "nope")
+    both = {"other.bas", "other.pxbas"}
+    check("load first priority wins",
+          resolve_load_name("other", both.__contains__, exts), "other.bas")
+
+
+def test_session_filestore_injection():
+    # A duck-typed store injected into Session receives SAVE/LOAD/FILES, and
+    # the screen messages stay identical to the local-store behavior.
+    class DictStore:
+        def __init__(self):
+            self.data = {}
+
+        def save(self, name, text):
+            name = resolve_save_name(name, DEFAULT_EXTENSIONS)
+            self.data[name] = text
+            return name
+
+        def load(self, name):
+            found = resolve_load_name(name, self.data.__contains__,
+                                      DEFAULT_EXTENSIONS)
+            if found not in self.data:
+                return None
+            return found, self.data[found]
+
+        def list_names(self):
+            return list(self.data)
+
+    def screen_lines(sess):
+        return [r for r in ("".join(row).rstrip() for row in sess.screen.chars)
+                if r]
+
+    store = DictStore()
+    s = Session(64, 42, DirectGraphics(_Recorder()), InputRing(),
+                filestore=store)
+    s.interp.store_line(10, 'PRINT "HI"')
+    s.screen.cls()
+    s._direct_command('SAVE "prog"')
+    check("injected store receives save",
+          store.data.get("prog.bas"), '10 PRINT "HI"\n')
+    check("save message uses stored name",
+          'SAVED "prog.bas"' in screen_lines(s), True)
+    s._direct_command("NEW")
+    s.screen.cls()
+    s._direct_command('LOAD "prog"')
+    check("load message uses stored name",
+          'LOADED "prog.bas"' in screen_lines(s), True)
+    check("loaded program restored",
+          list(s.interp.list_lines()), [(10, 'PRINT "HI"')])
+    s.screen.cls()
+    s._direct_command("FILES")
+    check("files lists injected store", screen_lines(s), ["prog.bas"])
+    s.screen.cls()
+    s._direct_command('LOAD "missing"')
+    check("not found shows typed name",
+          '?FILE NOT FOUND "missing"' in screen_lines(s), True)
+
+
+def test_web_filestore():
+    # WebFileStore (web/app/) bridges to a page storage object; tested here
+    # under CPython with a plain fake object, no browser involved.
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__),
+                                    "..", "web", "app"))
+    try:
+        from webfilestore import WebFileStore
+    finally:
+        sys.path.pop(0)
+
+    class JsNullLike:
+        # Mimics how JS null can arrive through the Pyodide bridge: an
+        # object that is neither None nor falsy. WebFileStore must not
+        # rely on it (missing files are detected via exists()).
+        def __str__(self):
+            return "null"
+
+    class FakeStorage:
+        def __init__(self):
+            self.data = {}
+            self.fail = False
+
+        def putFile(self, name, text):
+            if self.fail:
+                raise RuntimeError("quota exceeded")
+            self.data[name] = text
+
+        def getFile(self, name):
+            return self.data.get(name, JsNullLike())
+
+        def exists(self, name):
+            return name in self.data
+
+        def listNames(self):
+            return list(self.data)
+
+    st = FakeStorage()
+    ws = WebFileStore(st)
+    check("web save appends ext", ws.save("prog", "10 END\n"), "prog.bas")
+    check("web stored text", st.data["prog.bas"], "10 END\n")
+    check("web load resolves ext", ws.load("prog"), ("prog.bas", "10 END\n"))
+    check("web load missing", ws.load("nope"), None)
+    check("web list names", ws.list_names(), ["prog.bas"])
+    st.fail = True
+    try:
+        ws.save("x", "y")
+        check("web write failure raises", "no error", "BasicError")
+    except BasicError as e:
+        check("web write failure raises", e.code, Err.FILE_WRITE_FAILED)
+
+
 def test_break_stops_sound():
     # Ctrl+C (request_break) must abort the run AND stop all sound channels.
     rec = _Recorder()
@@ -1685,7 +1812,9 @@ def main():
         test_vsync_main_mode_control, test_vsync_main_mode_yield_on_eval,
         test_vsync_if_on_fires_on_compiled_if,
         test_session_run_frame_yields, test_files_command,
-        test_save_load_extensions, test_break_stops_sound,
+        test_save_load_extensions, test_filestore_name_resolution,
+        test_session_filestore_injection, test_web_filestore,
+        test_break_stops_sound,
         test_inkey_flush_on_run, test_break_during_input_wait,
         test_direct_error_resets_state,
         test_direct_graphics_immediate,

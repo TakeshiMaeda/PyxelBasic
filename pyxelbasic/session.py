@@ -13,12 +13,14 @@ loop keeps fresh by draining the input ring every cycle.
 """
 
 import fnmatch
-import os
 import sys
 import time
 
 from .version import __version__
 from .errors import BasicError, Err
+from .filestore import (
+    SAMPLE_DIR, DEFAULT_EXTENSIONS, FILESTORE_METHODS, LocalFileStore,
+)
 from .interpreter import Interpreter, tokenize
 from .textscreen import TextScreen
 from .editor import Editor
@@ -43,12 +45,8 @@ CYCLE_PERIOD = 0.064   # seconds; <= 0 disables the throttle (run free)
 # pacing). Higher is faster but less responsive. Used only when exec_mode="main".
 STEPS_PER_FRAME = 8000
 
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "samples")
-
-# Program file extensions, in priority order. The first is appended by SAVE
-# when the name has no extension; LOAD tries them in order until a file
-# exists. Overridable at startup (--ext); fixed for the session after that.
-DEFAULT_EXTENSIONS = (".bas", ".pxbas")
+# SAMPLE_DIR and DEFAULT_EXTENSIONS moved to filestore.py and are re-exported
+# above for import compatibility (main.py and tests import them from here).
 
 # Editor key id -> Editor method name ("enter" is line submission).
 EDITOR_KEY_ACTIONS = {
@@ -230,9 +228,13 @@ class Session:
                  autoload=None, autorun=False,
                  cycle_steps=CYCLE_STEPS, cycle_period=CYCLE_PERIOD,
                  debug_throttle=False, vsync_enabled=False, sprite_table=None,
-                 audio=None, extensions=None):
-        self.workdir = os.path.abspath(workdir) if workdir else SAMPLE_DIR
-        self.extensions = tuple(extensions) if extensions else DEFAULT_EXTENSIONS
+                 audio=None, extensions=None, filestore=None):
+        # SAVE/LOAD/FILES storage seam: the default local store keeps the
+        # historical workdir/extensions behavior; a front end may inject any
+        # object with the FILESTORE_METHODS surface (duck typing).
+        self.files = (filestore if filestore is not None
+                      else LocalFileStore(workdir, extensions))
+        assert all(hasattr(self.files, m) for m in FILESTORE_METHODS)
         self.screen = TextScreen(cols, rows)
         self.editor = Editor(self.screen)
         self.keys = KeyState()
@@ -533,11 +535,10 @@ class Session:
         name = next((v for (k, v) in toks if k == "STR"), None)
         if not name:
             raise BasicError(Err.SAVE_REQUIRES_NAME)
-        path = self._resolve_save_path(name)
-        with open(path, "w", encoding="utf-8") as f:
-            for ln, src in self.interp.list_lines():
-                f.write("%d %s\n" % (ln, src))
-        self.screen.print_line('SAVED "%s"' % os.path.basename(path))
+        text = "".join("%d %s\n" % (ln, src)
+                       for ln, src in self.interp.list_lines())
+        saved = self.files.save(name, text)
+        self.screen.print_line('SAVED "%s"' % saved)
 
     def _cmd_load(self, toks):
         name = next((v for (k, v) in toks if k == "STR"), None)
@@ -546,21 +547,14 @@ class Session:
         self._load_file(name)
 
     def _cmd_files(self, toks):
-        # FILES ["pattern"]: list the files in the workdir (extension shown),
+        # FILES ["pattern"]: list the files in the store (extension shown),
         # packed into columns that fit the screen width. The pattern matches
         # the full name including the extension ("*.bas", "*.txt", "A*").
-        # Names are shown exactly as the OS reports them, and fnmatch follows
-        # the host filesystem's case rules - the same policy as SAVE/LOAD,
+        # Names are shown exactly as the store reports them, and fnmatch
+        # follows the host's case rules - the same policy as SAVE/LOAD,
         # which pass the typed name through untouched.
         pattern = next((v for (k, v) in toks if k == "STR"), None)
-        try:
-            entries = os.listdir(self.workdir)
-        except OSError:
-            entries = []
-        names = sorted(
-            (e for e in entries
-             if os.path.isfile(os.path.join(self.workdir, e))),
-            key=str.lower)
+        names = sorted(self.files.list_names(), key=str.lower)
         if pattern is not None:
             names = [n for n in names if fnmatch.fnmatch(n, pattern)]
         if not names:
@@ -572,42 +566,19 @@ class Session:
             self.screen.print_line("".join(n.ljust(width) for n in row).rstrip())
 
     def _load_file(self, name):
-        path = self._resolve_load_path(name)
-        if not os.path.exists(path):
+        found = self.files.load(name)
+        if found is None:
             self.screen.print_line('?FILE NOT FOUND "%s"' % name)
             return False
+        display_name, text = found
         self.interp.new_program()
-        with open(path, "r", encoding="utf-8") as f:
-            for raw in f:
-                s = raw.rstrip("\n").strip()
-                if s and s[0].isdigit():
-                    num, rest = self._split_lineno(s)
-                    self.interp.store_line(num, rest)
-        self.screen.print_line('LOADED "%s"' % os.path.basename(path))
+        for raw in text.splitlines():
+            s = raw.strip()
+            if s and s[0].isdigit():
+                num, rest = self._split_lineno(s)
+                self.interp.store_line(num, rest)
+        self.screen.print_line('LOADED "%s"' % display_name)
         return True
-
-    def _resolve_save_path(self, name):
-        # A name with an extension is used as is; otherwise the first-priority
-        # extension is appended.
-        if not os.path.splitext(name)[1]:
-            name += self.extensions[0]
-        os.makedirs(self.workdir, exist_ok=True)
-        return os.path.join(self.workdir, name)
-
-    def _resolve_load_path(self, name):
-        # The typed name is tried exactly as given first; when no such file
-        # exists, the registered extensions are appended in priority order
-        # (never substituted) and the first existing candidate wins. When
-        # nothing exists, the literal path is returned so the caller's
-        # not-found report has a concrete path to test.
-        path = os.path.join(self.workdir, name)
-        if os.path.exists(path):
-            return path
-        for ext in self.extensions:
-            candidate = path + ext
-            if os.path.exists(candidate):
-                return candidate
-        return path
 
     # --- display ---
     def _banner(self):

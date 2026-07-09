@@ -1,0 +1,348 @@
+/* PyxelBasic web page styles. The Pyxel canvas is centered and is normally
+   the only thing on screen; the web UI (storage / options / theme) lives in
+   an overlay opened with the Menu button, with accordion sections.
+
+   All UI colors come from the custom properties below. The values here are
+   the "dark" preset; ui.js overrides them per-element-style when a theme or
+   a per-color customization is active (persisted in browser storage). */
+
+:root {
+  --pb-bg: #1a1a1e;       /* page background */
+  --pb-fg: #dddddd;       /* main text */
+  --pb-muted: #9a9aa4;    /* secondary text (version, hints, meters) */
+  --pb-panel: #232329;    /* overlay panel / accordion background */
+  --pb-border: #3a3a44;   /* borders */
+  --pb-control: #34343e;  /* buttons */
+  --pb-accent: #8a8af0;   /* links, drop-zone highlight */
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--pb-bg);
+  color: var(--pb-fg);
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#pb-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem 0.4rem;
+}
+
+#pb-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+}
+
+#pb-version {
+  font-size: 0.8rem;
+  color: var(--pb-muted);
+}
+
+#pb-menu-btn {
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+#pb-banner {
+  margin: 0 1rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #5a2020;
+  border: 1px solid #a04040;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #eee;
+}
+
+/* Centered stage for the Pyxel screen. */
+#pb-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding-bottom: 1rem;
+  box-sizing: border-box;
+}
+
+/* Fixed, aspect-preserving box for the Pyxel canvas (256x256 logical pixels,
+   scaled by pyxel.js inside this container). pyxel.css makes div#pyxel-screen
+   a full-viewport absolute layer; the extra ancestor in the selector outranks
+   that so the canvas stays a square box inside the centered layout (the
+   absolute canvas/overlay children then fill this box instead of the
+   viewport). */
+#pb-main div#pyxel-screen {
+  position: relative;
+  width: min(85vmin, 82vh, 768px);
+  height: min(85vmin, 82vh, 768px);
+  flex: none;
+}
+
+/* The canvas gets focus on click; a focus ring makes no sense on a game
+   screen. */
+#pyxel-screen canvas:focus {
+  outline: none;
+}
+
+/* --- overlay --- */
+
+#pb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+#pb-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#pb-panel {
+  position: relative;
+  margin: 6vh auto 0;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--pb-panel);
+  border: 1px solid var(--pb-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+#pb-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  color: var(--pb-muted);
+}
+
+/* --- accordion sections --- */
+
+.pb-acc {
+  border: 1px solid var(--pb-border);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  background: var(--pb-panel);
+}
+
+.pb-acc summary {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  color: var(--pb-muted);
+  user-select: none;
+}
+
+.pb-acc[open] summary {
+  border-bottom: 1px solid var(--pb-border);
+}
+
+.pb-acc-body {
+  padding: 0.6rem 0.75rem;
+}
+
+.pb-acc-body p {
+  font-size: 0.8rem;
+  margin: 0.4rem 0;
+  color: var(--pb-muted);
+}
+
+.pb-acc-body pre {
+  background: var(--pb-bg);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin: 0.4rem 0;
+}
+
+/* --- storage section --- */
+
+#pb-file-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+#pb-file-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+}
+
+.pb-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+
+button {
+  background: var(--pb-control);
+  color: var(--pb-fg);
+  border: 1px solid var(--pb-border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: color-mix(in srgb, var(--pb-control), var(--pb-fg) 12%);
+}
+
+#pb-usage {
+  font-size: 0.75rem;
+  color: var(--pb-muted);
+  margin-bottom: 0.5rem;
+}
+
+#pb-dropzone {
+  border: 2px dashed var(--pb-border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--pb-muted);
+  margin-bottom: 0.5rem;
+}
+
+#pb-dropzone.pb-dragging {
+  border-color: var(--pb-accent);
+  background: color-mix(in srgb, var(--pb-panel), var(--pb-accent) 12%);
+}
+
+.pb-filepick {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--pb-accent);
+  cursor: pointer;
+}
+
+.pb-filepick input {
+  display: none;
+}
+
+.pb-urlimport {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pb-urlimport input {
+  flex: 1;
+  background: var(--pb-bg);
+  color: var(--pb-fg);
+  border: 1px solid var(--pb-border);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.pb-diskimage {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.pb-diskimage span {
+  flex: 1;
+  color: var(--pb-muted);
+}
+
+/* The Import control is a file-input label; dress it as a button so the
+   row reads as a pair of actions. */
+.pb-diskimage .pb-filepick {
+  display: inline-block;
+  margin-top: 0;
+  background: var(--pb-control);
+  color: var(--pb-fg);
+  border: 1px solid var(--pb-border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.pb-diskimage .pb-filepick:hover {
+  background: color-mix(in srgb, var(--pb-control), var(--pb-fg) 12%);
+}
+
+#pb-storage-msg {
+  font-size: 0.75rem;
+  color: #8ac08a;
+  margin-top: 0.4rem;
+  min-height: 1em;
+  overflow-wrap: anywhere;
+}
+
+#pb-storage-msg.pb-error {
+  color: #e08080;
+}
+
+/* --- options / theme sections --- */
+
+.pb-acc-body label {
+  display: block;
+  font-size: 0.85rem;
+  margin: 0.4rem 0;
+}
+
+.pb-acc-body select,
+.pb-acc-body input[type="number"] {
+  background: var(--pb-bg);
+  color: var(--pb-fg);
+  border: 1px solid var(--pb-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.3rem;
+  margin-left: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.pb-acc-body .pb-check input {
+  margin-right: 0.4rem;
+}
+
+#pb-opt-apply,
+#pb-theme-reset {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.pb-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin: 0.3rem 0;
+}
+
+.pb-theme-row input[type="color"] {
+  width: 3.2rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--pb-border);
+  border-radius: 4px;
+  background: var(--pb-bg);
+  cursor: pointer;
+}

@@ -71,6 +71,7 @@ class Err(IntEnum):
     # --- 5xx: file / command ---
     SAVE_REQUIRES_NAME = 501
     LOAD_REQUIRES_NAME = 502
+    FILE_WRITE_FAILED = 503
 
 
 MESSAGES = {
@@ -129,6 +130,7 @@ MESSAGES = {
     # 5xx: file / command
     Err.SAVE_REQUIRES_NAME: "SAVE requires a file name",
     Err.LOAD_REQUIRES_NAME: "LOAD requires a file name",
+    Err.FILE_WRITE_FAILED: "File write failed: %s",
 }
 
 

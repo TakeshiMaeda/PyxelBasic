@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://github.com/kitao/pyxel).
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
-> This is version 0.1.8.  
+> This is version 0.2.0.  
 > v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
 
 ## Features
@@ -23,6 +23,7 @@ It recreates the feel of retro BASIC while letting you use Pyxel's screen, graph
 - Sound: play MML on Pyxel's 4 channels, with looping BGM and sound-effect interrupts (`PLAY`)
 - Switchable execution model (startup option): the Pyxel main loop or a separate thread
 - Save / load programs to files (`SAVE` / `LOAD`)
+- Web version: the same source code runs in the browser (WASM); `SAVE` / `LOAD` use browser storage
 - Runs on Pyxel (use of Pyxel's own features is planned)
 
 ## Requirements
@@ -98,6 +99,26 @@ RUN
 - `RUN` to execute, `LIST` to list, `NEW` to clear everything. Press `Ctrl+C` during a run to interrupt it and return to edit mode.
 - `SAVE "name"` / `LOAD "name"` save and load under the `samples/` directory. `FILES` lists the files there.
 
+## Web Version (run in the browser)
+
+A WASM build made from the same source code lets you try PyxelBasic in the
+browser with no installation.
+
+> Try it in your browser: https://takeshimaeda.github.io/PyxelBasic/
+
+- `SAVE` / `LOAD` / `FILES` use the browser's storage. The page's Storage
+  panel supports drag & drop import, download, delete and URL import. The
+  samples are imported automatically on the first visit.
+- A disk-image feature exports the whole storage as one ZIP and imports one
+  back (replacing the contents), handy for backups or carrying files to
+  another browser.
+- A URL of the form `?src=<program URL>&run=1` makes a shareable link that
+  runs the program just by opening it.
+- The execution mode is fixed to main (thread mode is unavailable in the
+  browser).
+
+See [web/README.md](web/README.md) for how to use it and the query parameters.
+
 ## Samples
 
 | File | Description |
@@ -146,6 +167,7 @@ PyxelBasic/
 │   ├── version.py         version string (Pyxel-independent; for --version)
 │   ├── keywords.py        single source of truth for reserved words (statement/function/operator tables)
 │   ├── errors.py          error codes and message definitions
+│   ├── filestore.py       SAVE/LOAD/FILES storage layer (swappable; Pyxel-independent)
 │   ├── interpreter.py     interpreter core (lexer, expression evaluator, execution engine; Pyxel-independent)
 │   ├── textscreen.py      text screen model (virtual VRAM, wrapping, scrolling; Pyxel-independent)
 │   ├── editor.py          full-screen editing logic (Pyxel-independent)
@@ -155,6 +177,7 @@ PyxelBasic/
 │   ├── audio.py           Pyxel audio front end (PLAY / MML; Sound per call)
 │   └── app.py             Pyxel terminal (input capture, rendering, main loop)
 ├── samples/               sample programs (.bas)
+├── web/                   the web (browser / WASM) version (see web/README.md)
 ├── tests/
 │   └── test_core.py       headless tests for the core
 └── docs/

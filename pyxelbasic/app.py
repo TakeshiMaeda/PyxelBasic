@@ -38,7 +38,8 @@ class App:
     def __init__(self, width=256, height=256, autoload=None, workdir=None,
                  autorun=False, show_fps=False, gfx_queue_size=None,
                  cycle_steps=None, cycle_period=None, debug_throttle=False,
-                 exec_mode="main", steps_per_frame=None, extensions=None):
+                 exec_mode="main", steps_per_frame=None, extensions=None,
+                 filestore=None):
         # Disable Pyxel's built-in ESC-to-quit; we confirm with a dialog instead.
         pyxel.init(width, height, title="PyxelBasic", fps=60,
                    quit_key=pyxel.KEY_NONE)
@@ -86,7 +87,7 @@ class App:
             vsync_enabled=(exec_mode == "main"),
             sprite_table=self.sprite_table,
             audio=self.audio_queue,
-            extensions=extensions)
+            extensions=extensions, filestore=filestore)
 
         self.confirm_quit = False
         self.show_fps = show_fps

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyxelBasic Web</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="pb-header">
+  <h1>PyxelBasic</h1>
+  <span id="pb-version"></span>
+  <button id="pb-menu-btn" title="Storage and options">Menu</button>
+</header>
+<div id="pb-banner" hidden></div>
+<main id="pb-main">
+  <div id="pyxel-screen"></div>
+</main>
+<!-- The web UI lives in an overlay: hidden while operating PyxelBasic,
+     opened with the Menu button. Sections are native accordions. -->
+<div id="pb-overlay" hidden>
+  <div id="pb-overlay-backdrop"></div>
+  <div id="pb-panel">
+    <div id="pb-panel-head">
+      <span>Menu</span>
+      <button id="pb-close-btn">Close</button>
+    </div>
+    <details class="pb-acc" open>
+      <summary>Storage</summary>
+      <div class="pb-acc-body">
+        <ul id="pb-file-list"></ul>
+        <div id="pb-usage"></div>
+        <div id="pb-dropzone">
+          Drop .bas files here
+          <label class="pb-filepick">or choose files
+            <input type="file" id="pb-file-input" multiple accept=".bas,.pxbas,.txt">
+          </label>
+        </div>
+        <div class="pb-urlimport">
+          <input type="url" id="pb-url-input" placeholder="https://... (CORS-enabled host)">
+          <button id="pb-url-btn">Import URL</button>
+        </div>
+        <div class="pb-diskimage">
+          <span>Disk image (all files as one .zip)</span>
+          <button id="pb-image-export">Export</button>
+          <label class="pb-filepick">Import
+            <input type="file" id="pb-image-input" accept=".zip">
+          </label>
+        </div>
+        <div id="pb-storage-msg"></div>
+      </div>
+    </details>
+    <details class="pb-acc">
+      <summary>Options</summary>
+      <div class="pb-acc-body">
+        <label>Load on start
+          <select id="pb-opt-load"><option value="">(none)</option></select>
+        </label>
+        <label class="pb-check"><input type="checkbox" id="pb-opt-run"> Run automatically</label>
+        <label>Steps per frame
+          <input type="number" id="pb-opt-spf" min="1" step="100" placeholder="8000">
+        </label>
+        <label class="pb-check"><input type="checkbox" id="pb-opt-fps"> Show FPS in title</label>
+        <button id="pb-opt-apply">Apply and Restart</button>
+      </div>
+    </details>
+    <details class="pb-acc">
+      <summary>Theme</summary>
+      <div class="pb-acc-body">
+        <label>Preset
+          <select id="pb-theme-preset"></select>
+        </label>
+        <div id="pb-theme-colors"></div>
+        <button id="pb-theme-reset">Reset to preset</button>
+      </div>
+    </details>
+    <details class="pb-acc">
+      <summary>Quick start</summary>
+      <div class="pb-acc-body">
+        <p>Click the screen, then type:</p>
+        <pre>FILES
+LOAD "cube"
+RUN</pre>
+        <p>Ctrl+C stops a running program. SAVE stores into this browser;
+           use Download to get a file out.</p>
+      </div>
+    </details>
+  </div>
+</div>
+<!-- Pyxel wasm runtime, loaded straight from the jsdelivr CDN (the same CDN
+     Pyxel uses for Pyodide). The tag is injected by web/build.py from
+     PYXEL_WASM_VERSION when assembling dist/. -->
+<script src="https://cdn.jsdelivr.net/gh/kitao/pyxel@__PYXEL_WASM_TAG__/wasm/pyxel.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>

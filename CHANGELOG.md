@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+- Added the web version: the same source code runs in the browser (WASM, Pyxel's web runtime) via the new `web/` set (build script and publishable page)
+- The web version's `SAVE` / `LOAD` / `FILES` access the browser's storage, with a storage UI on the page
+- Added shareable links that run a program just by opening them (`?src=URL&run=1`) and startup query parameters (`load` / `run` / `spf` / `fps`)
+- Split the `SAVE` / `LOAD` / `FILES` file access into a storage layer (`pyxelbasic/filestore.py`); desktop behavior is unchanged
+- Added error code 503 for file write failures
+
 ## 0.1.8
 - Added the `PALETTE` statement to change palette colors (`PALETTE no, rgb` / `PALETTE no, R, G, B` / `PALETTE RESET`)
 - Added the `--ext` startup option to register program extensions in priority order (default `.bas,.pxbas`)

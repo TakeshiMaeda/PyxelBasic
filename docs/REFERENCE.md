@@ -181,6 +181,7 @@ Management commands entered at the prompt without a line number.
 - The working directory defaults to `samples/`; the startup option `--workdir DIR` changes it (it cannot be changed from inside the interpreter).
 - File names are passed to the host filesystem exactly as typed, with no case normalization. Case sensitivity follows the platform: on Windows and macOS (by default) `LOAD "HELLO"` opens `hello.bas`, while on case-sensitive systems such as Linux it does not.
 - `FILES` lists the names exactly as the OS reports them, packed into as many columns as fit the screen width. Pattern matching also follows the host's case rules.
+- In the **web version**, `SAVE` / `LOAD` / `FILES` use the browser's storage (IndexedDB, per-origin, persistent) instead of a working directory. There is no equivalent of `--workdir` / `--ext`; the extensions are fixed at the default `.bas,.pxbas`. File names are always case-sensitive. Moving files in and out of the storage (drag & drop, download, URL import) is done from the page's Storage panel. See `web/README.md` for details.
 - Other statements (`PRINT`, assignments, etc.) can also be executed directly at the prompt.
 
 ---
@@ -667,6 +668,8 @@ Ends program execution.
 
 PyxelBasic lets you switch the execution model with the startup option `--exec-mode {main,thread}` (default `main`). The program logic and output are identical in both modes; the only differences are how frames are stepped and whether VSYNC has any effect.
 
+The **web version** always runs in main mode (the browser's WASM environment has no threads, so thread mode is not available).
+
 | | main mode (default) | thread mode |
 |---|---|---|
 | Execution | The Pyxel main loop drives the VM each frame | The VM runs sequentially on a separate thread |
@@ -848,6 +851,7 @@ Errors during execution are shown as `?ERROR <code> in line <line>: <message>`, 
 | 410 | `Palette value out of range: n` | A `PALETTE` number (0-15), RGB value (0-&HFFFFFF) or component (0-255) is out of range |
 | 501 | `SAVE requires a file name` | `SAVE` without a file name |
 | 502 | `LOAD requires a file name` | `LOAD` without a file name |
+| 503 | `File write failed: name` | Writing the file failed (in the web version, typically the browser storage quota) |
 
 `?FILE NOT FOUND "name"` is a separate notice printed by `LOAD` when the file is missing; it is not a coded error.
 

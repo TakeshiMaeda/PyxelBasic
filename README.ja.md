@@ -8,8 +8,7 @@
 [Pyxel](https://github.com/kitao/pyxel) 上で動作する、行番号方式の古典的 BASIC インタプリタです。
 レトロな BASIC の雰囲気を再現しつつ、Pyxel の画面・グラフィック・入力を扱えます。
 
-> 現在のバージョンはv0.1.8です。  
-> v0.1.6 で塗りつぶし円の命令名を `CIRCLEBF` から `CIRCLEF` に変更しました。
+> 現在のバージョンはv0.2.0です。
 
 ## 特徴
 
@@ -23,6 +22,7 @@
 - サウンド：Pyxel の 4 チャンネル MML 再生に対応。ループ BGM と効果音の割り込みに対応（`PLAY`）
 - BASICの駆動方式、Pyxelメインループ／別スレッドを起動引数で切替
 - プログラムのファイル保存・読み込み（`SAVE` / `LOAD`）
+- Web 版：同じソースコードをブラウザ（WASM）で実行。`SAVE` / `LOAD` はブラウザのストレージに保存
 - Pyxel上で動作し、Pyxelの機能を利用可能予定
 
 ## 必要環境
@@ -87,6 +87,24 @@ RUN
 - `RUN` で実行、`LIST` で一覧、`NEW` で全消去。実行中に `Ctrl+C` を押すと中断して編集モードへ戻ります。
 - `SAVE "名前"` / `LOAD "名前"` で `samples/` 配下に保存・読み込みできます。`FILES` でファイル一覧を表示できます。
 
+## Web 版（ブラウザで実行）
+
+同じソースコードから作った WASM 版を、インストール不要でブラウザから試せます。
+
+> ブラウザですぐ試す: https://takeshimaeda.github.io/PyxelBasic/
+
+- `SAVE` / `LOAD` / `FILES` はブラウザのストレージをアクセスします。ページの
+  Storage パネルからドラッグ＆ドロップでの取り込み・ダウンロード・削除・
+  URL からの取り込みができます。サンプルは初回アクセス時に自動で取り込まれます。
+- ストレージ全体を 1 つの ZIP として書き出し／読み込み（丸ごと入れ替え）できる
+  ディスクイメージ機能があり、バックアップや別ブラウザへの持ち運びに使えます。
+- `?src=<プログラムのURL>&run=1` の形の URL で、開くだけでプログラムが走る
+  共有リンクを作れます。
+- 実行モードは main モード固定です（thread モードはブラウザでは利用できません）。
+
+操作やクエリパラメータの詳細は [web/README.ja.md](web/README.ja.md) を
+参照してください。
+
 ## サンプル
 
 | ファイル | 内容 |
@@ -135,6 +153,7 @@ PyxelBasic/
 │   ├── version.py         バージョン文字列（Pyxel非依存／--version 用）
 │   ├── keywords.py        予約語の唯一の定義場所（命令・関数・演算子の表）
 │   ├── errors.py          エラーコードとメッセージの定義
+│   ├── filestore.py       SAVE/LOAD/FILES のストレージ層（差し替え可能／Pyxel非依存）
 │   ├── interpreter.py     インタプリタコア（字句解析・式評価・実行エンジン／Pyxel非依存）
 │   ├── textscreen.py      テキスト画面モデル（仮想VRAM・折返し・スクロール／Pyxel非依存）
 │   ├── editor.py          フルスクリーン編集ロジック（Pyxel非依存）
@@ -144,6 +163,7 @@ PyxelBasic/
 │   ├── audio.py           Pyxel 音声フロントエンド（PLAY / MML・Sound を都度生成）
 │   └── app.py             Pyxel 端末（入力取得・描画・メインループ）
 ├── samples/               サンプルプログラム（.bas）
+├── web/                   Web（ブラウザ／WASM）版一式（web/README.ja.md 参照）
 ├── tests/
 │   └── test_core.py       コアのヘッドレステスト
 └── docs/
