@@ -162,6 +162,10 @@ body {
   color: var(--pb-muted);
 }
 
+.pb-acc-body a {
+  color: var(--pb-accent);
+}
+
 .pb-acc-body pre {
   background: var(--pb-bg);
   padding: 0.5rem;

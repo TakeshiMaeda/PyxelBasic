@@ -144,7 +144,7 @@
     .then((v) => {
       if (v) {
         $("pb-version").textContent =
-          "v" + v.pyxelbasic + " / pyxel " + v.pyxelWasm + " (wasm)";
+          "v" + v.pyxelbasic + " / pyxel " + v.pyxelWasm;
       }
     })
     .catch(() => {});
