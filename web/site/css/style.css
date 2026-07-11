@@ -274,11 +274,11 @@ button:hover {
   color: var(--pb-muted);
 }
 
-/* The Import control is a file-input label; dress it as a button so the
-   row reads as a pair of actions. */
-.pb-diskimage .pb-filepick {
+/* The Import and Choose files controls are file-input labels; dress them
+   as buttons so they read as clickable actions. */
+.pb-diskimage .pb-filepick,
+#pb-dropzone .pb-filepick {
   display: inline-block;
-  margin-top: 0;
   background: var(--pb-control);
   color: var(--pb-fg);
   border: 1px solid var(--pb-border);
@@ -287,7 +287,15 @@ button:hover {
   font-size: 0.75rem;
 }
 
-.pb-diskimage .pb-filepick:hover {
+/* The dropzone button sits on its own second line; the base .pb-filepick
+   top margin serves as line spacing there. The disk-image row is a flex
+   row and needs no top margin. */
+.pb-diskimage .pb-filepick {
+  margin-top: 0;
+}
+
+.pb-diskimage .pb-filepick:hover,
+#pb-dropzone .pb-filepick:hover {
   background: color-mix(in srgb, var(--pb-control), var(--pb-fg) 12%);
 }
 
