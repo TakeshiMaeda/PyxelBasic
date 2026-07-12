@@ -134,6 +134,7 @@ See [web/README.md](web/README.md) for how to use it and the query parameters.
 | `samples/brickbreaker.bas` | Block breaker |
 | `samples/jumpman.bas` | Climb terrain with gravity and jumping (SET/PUT SPRITE, PLAY) |
 | `samples/fireworks.bas` | Fireworks display |
+| `samples/particle.bas` | Particle fountain of 256 sprites (SET/PUT SPRITE) |
 | `samples/cube.bas` | Rotating 3D wireframe cube (requires `--exec-mode main`, the default) |
 | `samples/puzzle.bas` | Rotating 3D cube puzzle with auto scramble / solve (requires `--exec-mode main`, the default) |
 | `samples/alltest.bas` | Self-test that exercises every statement and function (prints OK/NG per feature) |

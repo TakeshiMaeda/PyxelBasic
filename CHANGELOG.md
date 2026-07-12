@@ -6,6 +6,7 @@
 - Added shareable links that run a program just by opening them (`?src=URL&run=1`) and startup query parameters (`load` / `run` / `spf` / `fps`)
 - Split the `SAVE` / `LOAD` / `FILES` file access into a storage layer (`pyxelbasic/filestore.py`); desktop behavior is unchanged
 - Added error code 503 for file write failures
+- Added a sprite particle fountain sample `particle.bas`
 
 ## 0.1.8
 - Added the `PALETTE` statement to change palette colors (`PALETTE no, rgb` / `PALETTE no, R, G, B` / `PALETTE RESET`)

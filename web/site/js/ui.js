@@ -289,11 +289,10 @@
      through the public storage surface, so the alternative backends under
      web/alt/ keep working unchanged. */
   /* The blob URL must outlive the whole download: with "ask where to save"
-     the browser reads the blob only after the user picks a location, and a
-     URL revoked by then leaves a stuck .crdownload. Instead of revoking on
-     a timer (any timeout can lose the race against the dialog), keep the
-     URL until the next export replaces it. */
-  let exportUrl = null;
+     the browser reads the blob only after the user picks a location.
+     Revoking the previous URL when the next export starts still killed an
+     export whose dialog was open (double click), so export URLs are never
+     revoked; they are released with the document. */
 
   $("pb-image-export").addEventListener("click", async () => {
     const names = storage.listNames().sort(
@@ -311,10 +310,8 @@
       const zipName = "pyxelbasic-" + d.getFullYear() + pad(d.getMonth() + 1) +
         pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) +
         ".zip";
-      if (exportUrl) URL.revokeObjectURL(exportUrl);
-      exportUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = exportUrl;
+      a.href = URL.createObjectURL(blob);
       a.download = zipName;
       a.click();
       storageMsg("Exported " + names.length + " files as " + zipName);

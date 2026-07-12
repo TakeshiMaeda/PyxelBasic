@@ -55,6 +55,11 @@ body {
   font-size: 0.85rem;
 }
 
+#pb-ref-link {
+  font-size: 0.85rem;
+  color: var(--pb-accent);
+}
+
 #pb-banner {
   margin: 0 1rem 0.5rem;
   padding: 0.5rem 0.75rem;

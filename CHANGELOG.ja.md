@@ -6,6 +6,7 @@
 - 開くだけでプログラムが走る共有リンク（`?src=URL&run=1`）と起動クエリパラメータ（`load` / `run` / `spf` / `fps`）に対応
 - `SAVE` / `LOAD` / `FILES` のファイルアクセスをストレージ層（`pyxelbasic/filestore.py`）に分離（デスクトップ版の動作は不変）
 - ファイル書き込み失敗のエラーコード 503 を追加
+- スプライトのパーティクル噴水サンプル `particle.bas` を追加
 
 ## 0.1.8
 - パレットの色を変更する `PALETTE` 命令を追加（`PALETTE 番号, RGB値` / `PALETTE 番号, R, G, B` / `PALETTE RESET`）

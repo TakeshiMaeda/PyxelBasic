@@ -33,8 +33,6 @@
     persistent = false;
   }
 
-  let downloadUrl = null;    // blob URL of the last download (see below)
-
   const listeners = new Set();
   function notify() {
     listeners.forEach((fn) => { try { fn(); } catch (e) { /* UI's problem */ } });
@@ -95,14 +93,16 @@
       const text = this.getFile(name);
       if (text === null) return false;
       const blob = new Blob([text], { type: "text/plain" });
-      // The blob URL must outlive the whole download: with "ask where to
-      // save" the browser reads the blob only after the user picks a
-      // location, and a URL revoked by then leaves a stuck .crdownload.
-      // Keep the URL until the next download replaces it.
-      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-      downloadUrl = URL.createObjectURL(blob);
+      // The blob URL must stay alive until the browser has read the blob;
+      // with "ask where to save" that happens only after the user picks a
+      // location. Revoking the previous URL when the next download starts
+      // (the old scheme) still killed a download whose dialog was open -
+      // e.g. a double click revoked the URL the first dialog was about to
+      // read, and the save failed with no file written. Blob URLs of these
+      // small text files cost almost nothing and are released with the
+      // document, so they are never revoked.
       const a = document.createElement("a");
-      a.href = downloadUrl;
+      a.href = URL.createObjectURL(blob);
       a.download = name;
       a.click();
       return true;
