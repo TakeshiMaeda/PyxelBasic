@@ -21,7 +21,7 @@ from pyxelbasic.keywords import STATEMENTS, FUNCTIONS  # noqa: E402
 from pyxelbasic.runtime import (  # noqa: E402
     InputState, CommandQueue, DirectGraphics,
     InputRing, KeyState, SpriteTable, sprite8_pixel, sprite16_pixel,
-    EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT,
+    EV_CHAR, EV_DOWN, EV_UP, EV_REPEAT, TYPEAHEAD_CAPACITY,
 )
 from pyxelbasic.keywords import (  # noqa: E402
     KEY_UP, KEY_LEFT, KEY_BTN0, KEY_BTN1, KEY_RETURN,
@@ -1354,6 +1354,26 @@ def test_key_state_inkey_typeahead():
     check("inkey empty", ks.inkey(), "")
 
 
+def test_key_state_typeahead_bound():
+    # The typeahead is bounded: once full, new chars are dropped
+    # (typeahead-full), so a program that never reads INKEY$ cannot grow it.
+    ks = KeyState()
+    for i in range(TYPEAHEAD_CAPACITY + 44):
+        ks.apply((EV_CHAR, chr(65 + i % 26)))
+    got = []
+    c = ks.inkey()
+    while c != "":
+        got.append(c)
+        c = ks.inkey()
+    check("typeahead holds at most the cap", len(got), TYPEAHEAD_CAPACITY)
+    check("typeahead keeps the oldest chars", got[0], "A")
+    check("typeahead drops the newest overflow", got[-1],
+          chr(65 + (TYPEAHEAD_CAPACITY - 1) % 26))
+    # after draining, new chars are accepted again
+    ks.apply((EV_CHAR, "Z"))
+    check("typeahead accepts after drain", ks.inkey(), "Z")
+
+
 def _screen_rows(ts):
     return ["".join(ts.chars[y]).rstrip() for y in range(ts.rows)]
 
@@ -1824,7 +1844,7 @@ def main():
         test_runtime_input_state, test_runtime_command_queue_order,
         test_runtime_command_queue_backpressure,
         test_input_ring, test_key_state_stick_button,
-        test_key_state_inkey_typeahead,
+        test_key_state_inkey_typeahead, test_key_state_typeahead_bound,
         test_textscreen_print_wrap, test_textscreen_scroll_length_invariant,
         test_textscreen_logical_text, test_textscreen_snapshot,
         test_editor_type_delete, test_editor_overtype, test_editor_reflow_wrap,

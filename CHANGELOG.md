@@ -7,12 +7,16 @@
 - Split the `SAVE` / `LOAD` / `FILES` file access into a storage layer (`pyxelbasic/filestore.py`); desktop behavior is unchanged
 - Added error code 503 for file write failures
 - Added a sprite particle fountain sample `particle.bas`
+- Documented that a `FOR ... NEXT` loop body always runs at least once (the exit test is performed at `NEXT`)
 
 ## 0.1.8
 - Added the `PALETTE` statement to change palette colors (`PALETTE no, rgb` / `PALETTE no, R, G, B` / `PALETTE RESET`)
 - Added the `--ext` startup option to register program extensions in priority order (default `.bas,.pxbas`)
 - Reworked `SAVE` / `LOAD` / `FILES` to handle extensions other than `.bas`
 - Fixed a regression where `VSYNC IF ON` did not fire on stored-program `IF` lines
+
+## 0.1.7-hotfix-pc-slowdown
+- Bounded the `INKEY$` typeahead buffer at 256 characters; it grew without limit while a running program never read `INKEY$` (the button keys Z/X/C/space are typed characters too, so ordinary gameplay fed it)
 
 ## 0.1.7-hotfix
 - Fixed `GOSUB` inside an `IF ... THEN` / `ELSE` clause returning to the next line after `RETURN` instead of executing the rest of the clause

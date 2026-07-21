@@ -41,6 +41,13 @@ THROTTLE_DELAY = 0.0
 # drains them. Bounded; when full the newest event is dropped (typeahead-full).
 INPUT_RING_CAPACITY = 256
 
+# INKEY$ typeahead buffer bound (chars held in KeyState until the program reads
+# them). Without a bound, a running program that never calls INKEY$ would grow
+# it forever -- the BUTTON keys (Z/X/C/space) are printable, so ordinary
+# gameplay feeds it too. When full the newest char is dropped (typeahead-full),
+# matching the ring above.
+TYPEAHEAD_CAPACITY = 256
+
 # Sentinel for CommandQueue.call(): distinguishes "not serviced yet" from a real
 # None result (a call such as a successful play legitimately returns None).
 _PENDING = object()
@@ -114,7 +121,9 @@ class KeyState:
     """VM-side input state derived from the event stream.
 
     DOWN/UP maintain a set of currently-held keys (so STICK/BUTTON reflect the
-    current level); CHAR events accumulate in a typeahead buffer for INKEY$.
+    current level); CHAR events accumulate in a bounded typeahead buffer for
+    INKEY$ (when full the newest char is dropped, so a program that never reads
+    INKEY$ cannot grow it without limit).
     REPEAT events are for the editor only and do not affect the held set.
     This is the single accessor seam STICK/BUTTON/INKEY$ read through.
     """
@@ -130,7 +139,8 @@ class KeyState:
         elif kind == EV_UP:
             self._down.discard(value)
         elif kind == EV_CHAR:
-            self._chars.append(value)
+            if len(self._chars) < TYPEAHEAD_CAPACITY:
+                self._chars.append(value)
         # EV_REPEAT: editor-only; no effect on the held set or typeahead.
 
     def apply_all(self, events):

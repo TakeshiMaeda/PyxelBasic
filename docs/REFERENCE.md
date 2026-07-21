@@ -359,6 +359,7 @@ NEXT [variable]
 ```
 - The default increment when `STEP` is omitted is 1.
 - The loop ends when the variable exceeds `end` for a positive increment, or falls below `end` for a negative increment.
+- The exit test is performed at `NEXT`. Because of this, **the loop body always runs at least once**, even when the condition is already unmet at the start (as in `FOR I=0 TO -1`) — the test happens after the body.
 - Specifying a variable on `NEXT` unwinds to that variable's loop (supports nested loops).
 
 ```basic
@@ -614,7 +615,7 @@ Ends program execution.
 
 | Function | Returns |
 |---|---|
-| `INKEY$` | Pulls one buffered character (empty if none) |
+| `INKEY$` | Pulls one buffered character (empty if none; the typeahead holds up to 256 characters and overflow is dropped) |
 | `STICK(n)` | The direction-key state as a bit sum (see below) |
 | `BUTTON(n)` | 1 if button n is pressed, otherwise 0 |
 
