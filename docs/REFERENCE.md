@@ -4,8 +4,9 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.1.8
-- Runtime: Python 3.10+ with Pyxel
+- Target version: v0.2.0
+- Runtime: Python 3.10+ with Pyxel 2.9.5+ (desktop)
+- Web version: [open in your browser](https://takeshimaeda.github.io/PyxelBasic/)
 - Encoding: UTF-8 for both source and data files
 
 ---

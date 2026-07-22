@@ -4,8 +4,9 @@
 
 このドキュメントは、現在 PyxelBasic に**実装済み**の言語仕様を網羅的に記述したものです。
 
-- 対象バージョン: v0.1.8
-- 実行環境: Python 3.10 以降 + Pyxel
+- 対象バージョン: v0.2.0
+- 実行環境: Python 3.10 以降 + Pyxel 2.9.5 以降（デスクトップ版）
+- Web 版: [ブラウザで開く](https://takeshimaeda.github.io/PyxelBasic/)
 - 文字コード: ソース・データファイルとも UTF-8
 
 ---
