@@ -4,7 +4,7 @@ English | [日本語](REFERENCE.ja.md)
 
 This document comprehensively describes the language features **currently implemented** in PyxelBasic.
 
-- Target version: v0.2.0
+- Target version: v0.2.1
 - Runtime: Python 3.10+ with Pyxel 2.9.5+ (desktop)
 - Web version: [open in your browser](https://takeshimaeda.github.io/PyxelBasic/)
 - Encoding: UTF-8 for both source and data files
@@ -342,9 +342,8 @@ IF condition THEN line-number | statement [: statement ...] [ELSE line-number | 
 - Statements inside a clause run one at a time: `GOSUB` return points and
   `FOR ... NEXT` loops work correctly within the clause (e.g.
   `IF A=0 THEN GOSUB 200 : GOTO 300` executes `GOTO 300` after the `RETURN`).
-- For a nested `IF ... THEN IF ... THEN ... ELSE ...` on one line, which `IF` the
-  `ELSE` binds to is not guaranteed (best-effort; split into separate lines to be
-  sure).
+- For a nested `IF ... THEN IF ... THEN ... ELSE ...` on one line, the `ELSE`
+  binds to the nearest (innermost) `IF`, following the usual dangling-else rule.
 
 ```basic
 10 IF A = 0 THEN 100

@@ -145,6 +145,26 @@ def tokenize(src):
     return tokens
 
 
+def _matching_else_pos(toks, then_pos):
+    """Return the index of the ELSE bound to the IF whose THEN is at then_pos.
+
+    An ELSE binds to the nearest still-open THEN (the standard dangling-else
+    rule), so a nested ``IF ... THEN`` on the same line claims the next ELSE
+    before the outer IF can. Returns None when this IF has no ELSE. Shared by
+    _do_if and _compile_if_entries so both paths resolve nesting identically.
+    """
+    depth = 0
+    for i in range(then_pos + 1, len(toks)):
+        t = toks[i]
+        if t == ("KW", "THEN"):
+            depth += 1
+        elif t == ("KW", "ELSE"):
+            if depth == 0:
+                return i
+            depth -= 1
+    return None
+
+
 def split_statements(toks):
     """Split a line's token list into separate statements at top-level COLON.
 
@@ -683,8 +703,9 @@ class Interpreter:
 
         Each clause statement is a real self.code entry with its own pc, so
         GOSUB return addresses and FOR loop points (both "pc + 1") work inside
-        THEN/ELSE clauses. Parsing mirrors _do_if exactly (flat first-THEN /
-        first-ELSE scan, implicit GOTO, lazily-reported empty clauses); a
+        THEN/ELSE clauses. Parsing mirrors _do_if exactly (first-THEN /
+        nearest-matching-ELSE scan, implicit GOTO, lazily-reported empty
+        clauses); a
         missing THEN keeps the raw statement so _do_if raises when (and only
         when) the line actually executes.
         """
@@ -695,11 +716,7 @@ class Interpreter:
                 break
         if then_pos is None:
             return [toks]
-        else_pos = None
-        for i in range(then_pos + 1, len(toks)):
-            if toks[i] == ("KW", "ELSE"):
-                else_pos = i
-                break
+        else_pos = _matching_else_pos(toks, then_pos)
         cond = toks[1:then_pos]
         end = else_pos if else_pos is not None else len(toks)
         then_part = self._compile_clause_entries(toks[then_pos + 1:end])
@@ -1018,13 +1035,9 @@ class Interpreter:
                 break
         if then_pos is None:
             raise BasicError(Err.EXPECTED_THEN)
-        # The first ELSE after THEN ends the then-clause. (A nested IF...THEN...
-        # ELSE on one line binds the ELSE to the outer IF; best-effort only.)
-        else_pos = None
-        for i in range(then_pos + 1, len(toks)):
-            if toks[i] == ("KW", "ELSE"):
-                else_pos = i
-                break
+        # ELSE binds to the nearest inner IF (standard dangling-else rule): a
+        # nested IF...THEN on the same line claims its own ELSE first.
+        else_pos = _matching_else_pos(toks, then_pos)
         ev = Evaluator(toks, self, 1)
         cond = ev.parse()
         truthy = bool(cond) and cond != 0

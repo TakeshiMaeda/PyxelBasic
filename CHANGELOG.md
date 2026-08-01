@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1
+- Fixed a nested one-line `IF ... THEN IF ... THEN ... ELSE ...` so the `ELSE` binds to the nearest (innermost) `IF` (it used to bind to the outer `IF`). A second `ELSE` on the line no longer errors
+
 ## 0.2.0
 - Added the web version: the same source code runs in the browser (WASM, Pyxel's web runtime) via the new `web/` set (build script and publishable page)
 - The web version's `SAVE` / `LOAD` / `FILES` access the browser's storage, with a storage UI on the page

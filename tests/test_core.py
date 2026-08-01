@@ -426,6 +426,33 @@ def test_direct_if_then_multi():
     check("direct if-then multi", io.out[:2], ["YES", "AGAIN"])
 
 
+def test_nested_if_else_binds_inner():
+    # Dangling else: ELSE binds to the nearest inner IF, in both the direct
+    # path (_do_if) and the compiled stored-program path (_compile_if_entries).
+    def direct(src):
+        return run_direct(src)[0].out
+
+    # ELSE belongs to the inner IF, so the outer IF has no else:
+    # outer false -> nothing runs.
+    check("nested else->inner, outer false (direct)",
+          direct('IF 0 THEN IF 1 THEN PRINT "A" ELSE PRINT "B"'), [])
+    # outer true -> inner IF runs; inner false -> inner's else prints B.
+    check("nested else->inner, inner false (direct)",
+          direct('IF 1 THEN IF 0 THEN PRINT "A" ELSE PRINT "B"'), ["B"])
+    # Two elses: inner ELSE -> B, outer ELSE -> C. Outer false -> C
+    # (previously this raised ERROR 103).
+    check("nested double else, outer false (direct)",
+          direct('IF 0 THEN IF 1 THEN PRINT "A" ELSE PRINT "B" ELSE PRINT "C"'),
+          ["C"])
+
+    # Same resolution through the compiled (stored program) path.
+    io, _ = run_program([(10, 'IF 1 THEN IF 0 THEN PRINT "A" ELSE PRINT "B"')])
+    check("nested else->inner, inner false (compiled)", io.out, ["B"])
+    io, _ = run_program(
+        [(10, 'IF 0 THEN IF 1 THEN PRINT "A" ELSE PRINT "B" ELSE PRINT "C"')])
+    check("nested double else, outer false (compiled)", io.out, ["C"])
+
+
 def test_direct_for_next_no_loop():
     # Known limitation: FOR/NEXT cannot loop in direct mode. The loop relies on
     # rewinding the program counter into self.code, which only exists during
@@ -1807,6 +1834,7 @@ def main():
         test_if_compiled_edges,
         test_multi_statement_data_unaffected,
         test_direct_multi_statement, test_direct_if_then_multi,
+        test_nested_if_else_binds_inner,
         test_direct_for_next_no_loop,
         test_string_funcs, test_string_funcs_edge,
         test_round_half_away_from_zero, test_numeric_array_rejects_string,

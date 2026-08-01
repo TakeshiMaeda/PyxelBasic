@@ -4,7 +4,7 @@
 
 このドキュメントは、現在 PyxelBasic に**実装済み**の言語仕様を網羅的に記述したものです。
 
-- 対象バージョン: v0.2.0
+- 対象バージョン: v0.2.1
 - 実行環境: Python 3.10 以降 + Pyxel 2.9.5 以降（デスクトップ版）
 - Web 版: [ブラウザで開く](https://takeshimaeda.github.io/PyxelBasic/)
 - 文字コード: ソース・データファイルとも UTF-8
@@ -328,8 +328,8 @@ IF 条件 THEN 行番号 | 命令 [: 命令 ...] [ELSE 行番号 | 命令 [: 命
 - 節内の命令も 1 文ずつ実行される。`GOSUB` の戻り先や `FOR ... NEXT` のループは
   節の中で正しく機能する（例: `IF A=0 THEN GOSUB 200 : GOTO 300` は `RETURN` 後に
   `GOTO 300` を実行する）。
-- 1 行内でネストした `IF ... THEN IF ... THEN ... ELSE ...` の `ELSE` の結び付きは保証しない
-  （best-effort。確実にしたい場合は行を分ける）。
+- 1 行内でネストした `IF ... THEN IF ... THEN ... ELSE ...` の `ELSE` は、最も近い（内側の）
+  `IF` に結び付く（一般的な dangling-else の規則に従う）。
 
 ```basic
 10 IF A = 0 THEN 100
