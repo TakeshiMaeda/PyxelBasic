@@ -9,7 +9,8 @@ A line-numbered, classic-style BASIC interpreter that runs on [Pyxel](https://gi
 It recreates the feel of retro BASIC while letting you use Pyxel's screen, graphics, and input.
 
 > This is version 0.2.1.  
-> v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.
+> v0.1.6 renamed the filled-circle statement from `CIRCLEBF` to `CIRCLEF`.  
+> PyxelBasic is an unofficial project that uses Pyxel.
 
 ## Features
 
@@ -226,3 +227,4 @@ Thank you for publishing such a wonderful retro game engine.
 
 PyxelBasic is an **unofficial** project that uses Pyxel and is not affiliated with Pyxel or its developer.
 The name "Pyxel" belongs to its original author.
+The original author has kindly consented to the use of the name.
